@@ -225,4 +225,9 @@ frontend/dist/
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+.env.*
+!.env.example
 .DS_Store

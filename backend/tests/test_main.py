@@ -17,6 +17,23 @@ def test_main_registers_trip_table_before_startup():
     assert "trip" in SQLModel.metadata.tables
 
 
+def test_trip_not_found_handler_returns_404():
+    import asyncio
+    import json
+
+    from app.services.trips import TripNotFoundError
+
+    response = asyncio.run(main.trip_not_found_handler(None, TripNotFoundError(5)))
+    assert response.status_code == 404
+    assert json.loads(response.body) == {"detail": "Trip 5 not found"}
+
+
+def test_trips_router_is_mounted():
+    paths = main.app.openapi()["paths"]
+    assert set(paths["/api/trips"]) == {"get", "post"}
+    assert set(paths["/api/trips/{trip_id}"]) == {"get", "put", "delete"}
+
+
 def _preflight(client: TestClient, origin: str):
     return client.options(
         "/docs",

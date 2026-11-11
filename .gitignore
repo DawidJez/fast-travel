@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Fast Travel
+node_modules/
+frontend/dist/
+*.db
+*.sqlite
+*.sqlite3
+.DS_Store

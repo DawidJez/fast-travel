@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import config
+from app import models  # noqa: F401  (registers tables before create_db_and_tables)
 from app.db import create_db_and_tables
 
 

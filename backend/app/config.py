@@ -17,6 +17,15 @@ DEFAULT_DB_PATH = BACKEND_DIR / "fast_travel.db"
 # Source: Vite dev server default origin (https://vite.dev/config/server-options#server-port).
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173"]
 
+# Source: project decision — limits for trip text fields (form-friendly, keep DB rows small).
+TRIP_NAME_MAX_LENGTH = 100
+TRIP_PLACE_MAX_LENGTH = 200  # origin / destination
+TRIP_NOTES_MAX_LENGTH = 1000
+
+# Source: WGS 84 coordinate ranges (degrees), as used by Open-Meteo geocoding.
+LATITUDE_MIN, LATITUDE_MAX = -90.0, 90.0
+LONGITUDE_MIN, LONGITUDE_MAX = -180.0, 180.0
+
 DB_PATH_ENV = "FAST_TRAVEL_DB_PATH"
 CORS_ORIGINS_ENV = "FAST_TRAVEL_CORS_ORIGINS"  # comma-separated list
 

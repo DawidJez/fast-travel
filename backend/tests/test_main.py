@@ -11,6 +11,12 @@ def test_lifespan_creates_tables_on_startup(monkeypatch):
         assert calls == [True]
 
 
+def test_main_registers_trip_table_before_startup():
+    from sqlmodel import SQLModel
+
+    assert "trip" in SQLModel.metadata.tables
+
+
 def _preflight(client: TestClient, origin: str):
     return client.options(
         "/docs",

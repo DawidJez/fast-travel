@@ -34,6 +34,12 @@ def test_trips_router_is_mounted():
     assert set(paths["/api/trips/{trip_id}"]) == {"get", "put", "delete"}
 
 
+def test_health_returns_ok():
+    response = TestClient(main.app).get("/api/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def _preflight(client: TestClient, origin: str):
     return client.options(
         "/docs",

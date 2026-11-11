@@ -39,3 +39,9 @@ async def trip_not_found_handler(request: Request, exc: TripNotFoundError) -> JS
 
 
 app.include_router(trips_api.router)
+
+
+@app.get("/api/health", tags=["health"])
+def health() -> dict[str, str]:
+    """Liveness check: the app is up and answering requests."""
+    return {"status": "ok"}

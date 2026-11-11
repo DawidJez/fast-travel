@@ -14,8 +14,8 @@ def test_utc_now_is_timezone_aware_utc():
     assert abs(datetime.now(timezone.utc) - now) < timedelta(seconds=5)
 
 
-def test_trip_table_is_created(tmp_path):
-    engine = db.make_engine(f"sqlite:///{tmp_path / 't.db'}")
+def test_trip_table_is_created(empty_engine):
+    engine = empty_engine
     db.create_db_and_tables(engine)
 
     columns = {c["name"]: c for c in inspect(engine).get_columns("trip")}
@@ -29,10 +29,7 @@ def test_trip_table_is_created(tmp_path):
         assert columns[required]["nullable"] is False
 
 
-def test_trip_saves_with_defaults(tmp_path):
-    engine = db.make_engine(f"sqlite:///{tmp_path / 't.db'}")
-    db.create_db_and_tables(engine)
-
+def test_trip_saves_with_defaults(engine):
     with Session(engine) as session:
         trip = Trip(name="Work", origin="Kraków", destination="Wieliczka")
         session.add(trip)

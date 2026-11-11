@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 from sqlmodel import Session
 
-from app import config, db
+from app import config
 from app.models import Trip
 from app.schemas import TripCreate, TripRead, TripUpdate
 
@@ -143,9 +143,7 @@ def test_update_rejects_out_of_range_coordinates():
 
 # --- TripRead ---
 
-def test_read_from_db_object_has_utc_created_at(tmp_path):
-    engine = db.make_engine(f"sqlite:///{tmp_path / 't.db'}")
-    db.create_db_and_tables(engine)
+def test_read_from_db_object_has_utc_created_at(engine):
     with Session(engine) as session:
         trip = Trip(**VALID, notes="n", origin_lat=50.06, origin_lon=19.94)
         session.add(trip)

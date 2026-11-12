@@ -26,6 +26,13 @@ TRIP_NOTES_MAX_LENGTH = 1000
 LATITUDE_MIN, LATITUDE_MAX = -90.0, 90.0
 LONGITUDE_MIN, LONGITUDE_MAX = -180.0, 180.0
 
+# Source: Open-Meteo Geocoding API, no API key needed (https://open-meteo.com/en/docs/geocoding-api).
+GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
+# Source: project decision — Polish UI, Polish place names; one best match is enough for a form.
+GEOCODING_LANGUAGE = "pl"
+# Source: project decision — the API usually answers in well under 1 s; fail fast instead of hanging the request.
+GEOCODING_TIMEOUT_SECONDS = 5.0
+
 # Source: SQLite INTEGER is a signed 64-bit value (https://www.sqlite.org/datatype3.html);
 # larger ids cannot exist and would crash the driver, so the API rejects them up front.
 SQLITE_MAX_INTEGER = 2**63 - 1

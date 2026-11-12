@@ -54,16 +54,17 @@ def _rank_key(result: ModeResult) -> tuple[int, float, float]:
     return (round(result.time_minutes), result.co2_grams, result.cost_pln)
 
 
-def recommend(weather: Weather, results: list[ModeResult]) -> Recommendation:
+def recommend(weather: Weather | None, results: list[ModeResult]) -> Recommendation:
     """Pick the recommended mode with a short Polish reason.
 
+    `weather=None` (service unavailable): no weather rules, and the reason says so.
     Raises ValueError if `results` is empty or no mode survives the weather and time rules.
     """
     if not results:
         raise ValueError("results must not be empty")
 
-    excluded = weather_exclusions(weather)
-    notes = []
+    excluded = weather_exclusions(weather) if weather is not None else {}
+    notes = [] if weather is not None else ["brak danych pogodowych, pogoda nie została uwzględniona"]
     candidates = []
     for r in results:
         label = MODE_LABELS_PL[r.mode]

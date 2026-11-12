@@ -6,6 +6,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from app import config
+from app.services.calculators import Mode  # pure module (imports only config): no import cycle
 
 Name = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=config.TRIP_NAME_MAX_LENGTH)
@@ -97,3 +98,42 @@ class TripRead(BaseModel):
     def assume_utc(cls, value: datetime) -> datetime:
         """SQLite drops timezone info; stored timestamps are UTC, so re-attach it."""
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+# --- Comparison (GET /api/trips/{id}/comparison) ---
+
+
+class ModeComparisonRead(BaseModel):
+    """Figures for one transport mode. Rounded for display; computed unrounded."""
+
+    mode: Mode
+    distance_km: float = Field(description="Estimated route length, 1 decimal")
+    time_minutes: float = Field(description="Door-to-door estimate, 1 decimal")
+    cost_pln: float = Field(description="2 decimals")
+    co2_grams: int = Field(description="Direct CO2e per traveller, whole grams")
+
+
+class WeatherRead(BaseModel):
+    """Weather now at the trip origin."""
+
+    temperature_c: float
+    precipitation_mm: float
+    wind_speed_kmh: float
+
+
+class RecommendationRead(BaseModel):
+    mode: Mode
+    reason: str
+
+
+class TripComparisonRead(BaseModel):
+    """Body of GET /api/trips/{id}/comparison."""
+
+    trip_id: int
+    origin: str
+    destination: str
+    straight_line_km: float = Field(description="Great-circle distance, 1 decimal")
+    car_peak: bool = Field(description="True if the car rush-hour penalty was applied (local time now)")
+    weather: WeatherRead | None = Field(description="null when the weather service is unavailable")
+    modes: list[ModeComparisonRead]
+    recommendation: RecommendationRead

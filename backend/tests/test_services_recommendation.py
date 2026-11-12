@@ -221,3 +221,19 @@ def test_mode_result_is_frozen():
     result = R(Mode.CAR, 10)
     with pytest.raises(AttributeError):
         result.time_minutes = 5
+
+
+# --- no weather data ---
+
+def test_no_weather_skips_weather_rules_and_says_so():
+    rec = recommend(None, SHORT_TRIP)
+    assert rec.mode is Mode.BIKE
+    assert rec.reason == (
+        "Brak danych pogodowych, pogoda nie została uwzględniona. Najszybciej: rower (ok. 9 min, 0 g CO₂)."
+    )
+
+
+def test_no_weather_still_applies_time_limits():
+    rec = recommend(None, LONG_TRIP)
+    assert rec.mode is Mode.CAR
+    assert "pieszo odpada (ok. 120 min, za długo)" in rec.reason

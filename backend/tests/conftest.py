@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, create_engine
@@ -7,6 +10,7 @@ from app import db
 from app.api import trips as trips_api
 from app.main import app
 from app.services.geo import Coordinates, PlaceNotFoundError
+from app.services.weather import Weather
 
 # Coordinates the fake geocoder knows (rounded real values).
 KNOWN_PLACES = {
@@ -35,9 +39,43 @@ class FakeGeocoder:
         return self.places[place]
 
 
+class FakeWeather:
+    """Stands in for app.services.weather.current_weather: fixed weather or an error."""
+
+    def __init__(self, weather: Weather | None = None, error: Exception | None = None):
+        self.weather = weather or Weather(temperature_c=12.0, precipitation_mm=0.0, wind_speed_kmh=10.0)
+        self.error = error
+        self.calls: list[Coordinates] = []
+
+    def __call__(self, point: Coordinates) -> Weather:
+        self.calls.append(point)
+        if self.error is not None:
+            raise self.error
+        return self.weather
+
+
+# Off-peak by default: Thursday 12:00 in Warsaw.
+DEFAULT_NOW = datetime(2026, 11, 12, 12, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
+
+
 @pytest.fixture
 def geocoder():
     return FakeGeocoder()
+
+
+@pytest.fixture
+def weather_provider():
+    return FakeWeather()
+
+
+@pytest.fixture
+def clock():
+    """Mutable holder for the time the API sees: set clock.now = ... in a test."""
+
+    class Clock:
+        now = DEFAULT_NOW
+
+    return Clock()
 
 
 @pytest.fixture
@@ -72,15 +110,21 @@ def session(engine):
 
 
 @pytest.fixture
-def client(engine, geocoder):
-    """API client on the per-test in-memory DB and the fake geocoder (no real DB file, no network)."""
+def client(engine, geocoder, weather_provider, clock):
+    """API client on the per-test in-memory DB, fake geocoder, fake weather and a fixed clock
+    (no real DB file, no network, deterministic time)."""
 
     def override_get_session():
         with Session(engine) as session:
             yield session
 
-    app.dependency_overrides[db.get_session] = override_get_session
-    app.dependency_overrides[trips_api.get_geocoder] = lambda: geocoder
+    overrides = {
+        db.get_session: override_get_session,
+        trips_api.get_geocoder: lambda: geocoder,
+        trips_api.get_weather_provider: lambda: weather_provider,
+        trips_api.get_now: lambda: clock.now,
+    }
+    app.dependency_overrides.update(overrides)
     yield TestClient(app)
-    app.dependency_overrides.pop(db.get_session, None)
-    app.dependency_overrides.pop(trips_api.get_geocoder, None)
+    for dependency in overrides:
+        app.dependency_overrides.pop(dependency, None)

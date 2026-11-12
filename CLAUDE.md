@@ -13,6 +13,7 @@ One AI feature: free-text trip input -> LLM returns structured JSON -> validated
 - backend/: Python, FastAPI, SQLite (SQLModel/SQLAlchemy), Pydantic, pytest
 - frontend/: React + Vite + TypeScript
 - External data (no API keys): Open-Meteo geocoding + forecast. LLM provider is hidden behind an `LLMClient` interface.
+- Geocoding fallback: Nominatim (OpenStreetMap), used only when Open-Meteo finds nothing or is unavailable (addresses, POIs, "City District"). Follow its usage policy (https://operations.osmfoundation.org/policies/nominatim/): own User-Agent, max 1 request/s for the whole app, cache results, can be switched off with `FAST_TRAVEL_NOMINATIM_ENABLED=0`, no autocomplete, and the frontend must show "© OpenStreetMap contributors".
 
 ## Commands
 - Backend dev: `cd backend && uvicorn app.main:app --reload`

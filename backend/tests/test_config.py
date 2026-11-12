@@ -1,3 +1,5 @@
+import pytest
+
 from pathlib import Path
 
 from app import config
@@ -70,3 +72,24 @@ def test_co2_car_above_public_transport_above_active_modes():
     assert config.CAR_CO2_G_PER_KM > config.PUBLIC_TRANSPORT_CO2_G_PER_KM > 0
     assert config.BIKE_CO2_G_PER_KM == config.WALK_CO2_G_PER_KM == 0
 
+
+
+# --- Nominatim switch ---
+
+@pytest.mark.parametrize("value", ["0", "false", "FALSE", " no ", "off"])
+def test_load_nominatim_enabled_switched_off(value):
+    assert config.load_nominatim_enabled({config.NOMINATIM_ENABLED_ENV: value}) is False
+
+
+@pytest.mark.parametrize("env", [{}, {config.NOMINATIM_ENABLED_ENV: ""}, {config.NOMINATIM_ENABLED_ENV: "1"},
+                                 {config.NOMINATIM_ENABLED_ENV: "true"}])
+def test_load_nominatim_enabled_default_on(env):
+    assert config.load_nominatim_enabled(env) is True
+
+
+def test_nominatim_user_agent_is_not_a_library_default():
+    assert config.NOMINATIM_USER_AGENT.startswith("fast-travel/")
+
+
+def test_nominatim_interval_respects_policy_maximum():
+    assert config.NOMINATIM_MIN_INTERVAL_SECONDS >= 1.0  # "absolute maximum of 1 request per second"

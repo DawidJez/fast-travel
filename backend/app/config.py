@@ -34,6 +34,26 @@ GEOCODING_LANGUAGE = "pl"
 # "Sopot" in Romania/Serbia/Bulgaria first (Polish Sopot not even in the top 5, checked 2026-11-12).
 # ISO 3166-1 alpha-2 code, sent as the API's `countryCode` parameter.
 GEOCODING_COUNTRY_CODE = "PL"
+
+# Source: Nominatim (OpenStreetMap) search API, no API key (https://nominatim.org/release-docs/latest/api/Search/).
+# Fallback geocoder: used only when Open-Meteo finds nothing or is unavailable. Open-Meteo knows
+# towns and districts ("Oliwa") but not addresses, POIs or "City District" ("Politechnika Gdańska").
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+# Source: Nominatim usage policy (https://operations.osmfoundation.org/policies/nominatim/):
+# - a User-Agent identifying the application is required (library defaults are not accepted);
+# - absolute maximum 1 request per second for the whole application;
+# - repeated identical queries should be served from a cache;
+# - the app must be able to switch the service off without a software update (env var below);
+# - autocomplete use is forbidden; attribution "© OpenStreetMap contributors" must be shown in the UI.
+NOMINATIM_USER_AGENT = "fast-travel/0.1 (commute comparison app)"
+NOMINATIM_MIN_INTERVAL_SECONDS = 1.0
+NOMINATIM_CACHE_SIZE = 256
+NOMINATIM_ENABLED_ENV = "FAST_TRAVEL_NOMINATIM_ENABLED"  # "0" / "false" / "no" / "off" switches it off
+
+
+def load_nominatim_enabled(environ: Mapping[str, str]) -> bool:
+    """Nominatim fallback is on unless the env var says 0/false/no/off."""
+    return environ.get(NOMINATIM_ENABLED_ENV, "").strip().lower() not in {"0", "false", "no", "off"}
 # Source: project decision — the API usually answers in well under 1 s; fail fast instead of hanging the request.
 GEOCODING_TIMEOUT_SECONDS = 5.0
 
@@ -203,3 +223,4 @@ def load_cors_origins(environ: Mapping[str, str]) -> list[str]:
 DB_PATH = load_db_path(os.environ)
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 CORS_ORIGINS = load_cors_origins(os.environ)
+NOMINATIM_ENABLED = load_nominatim_enabled(os.environ)

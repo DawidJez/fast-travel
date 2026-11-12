@@ -37,6 +37,14 @@ GEOCODING_COUNTRY_CODE = "PL"
 # Source: project decision — the API usually answers in well under 1 s; fail fast instead of hanging the request.
 GEOCODING_TIMEOUT_SECONDS = 5.0
 
+# Source: Open-Meteo Forecast API, no API key needed (https://open-meteo.com/en/docs).
+# `current` = conditions now; precipitation is the sum over the preceding 15-minute interval.
+# Default units: temperature_2m in °C, precipitation in mm, wind_speed_10m in km/h.
+WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
+WEATHER_CURRENT_VARIABLES = "temperature_2m,precipitation,wind_speed_10m"
+# Source: project decision — same fail-fast limit as geocoding.
+WEATHER_TIMEOUT_SECONDS = 5.0
+
 # --- Distance ---------------------------------------------------------------
 
 # Source: IUGG mean Earth radius R1 = 6371.0088 km (Moritz, "Geodetic Reference System 1980",

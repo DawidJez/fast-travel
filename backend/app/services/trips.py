@@ -5,6 +5,12 @@ from sqlmodel import Session, col, select
 from app.models import Trip
 from app.schemas import TripCreate, TripUpdate
 
+# Which coordinate fields belong to which place name.
+PLACE_COORDINATES = {
+    "origin": ("origin_lat", "origin_lon"),
+    "destination": ("destination_lat", "destination_lon"),
+}
+
 
 class TripNotFoundError(Exception):
     """Raised when a trip with the given id does not exist."""
@@ -38,9 +44,18 @@ def get_trip(session: Session, trip_id: int) -> Trip:
 
 
 def update_trip(session: Session, trip_id: int, data: TripUpdate) -> Trip:
-    """Apply only the fields that were sent; raise TripNotFoundError if missing."""
+    """Apply only the fields that were sent; raise TripNotFoundError if missing.
+
+    If a place name changes and no new coordinates for it are sent, its old
+    coordinates are cleared so they never point at the previous place.
+    """
     trip = get_trip(session, trip_id)
-    trip.sqlmodel_update(data.model_dump(exclude_unset=True))
+    changes = data.model_dump(exclude_unset=True)
+    for place, (lat, lon) in PLACE_COORDINATES.items():
+        renamed = place in changes and changes[place] != getattr(trip, place)
+        if renamed and lat not in changes:
+            changes[lat] = changes[lon] = None
+    trip.sqlmodel_update(changes)
     session.add(trip)
     session.commit()
     session.refresh(trip)

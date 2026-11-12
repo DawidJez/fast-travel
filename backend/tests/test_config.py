@@ -21,13 +21,18 @@ def test_default_db_path_is_inside_backend_dir():
 
 
 def test_load_cors_origins_default_when_env_missing():
-    assert config.load_cors_origins({}) == ["http://localhost:5173"]
+    assert config.load_cors_origins({}) == config.DEFAULT_CORS_ORIGINS
+
+
+def test_default_cors_origin_is_vite_dev_server():
+    assert config.DEFAULT_CORS_ORIGINS == ["http://localhost:5173"]
 
 
 def test_load_cors_origins_default_is_a_copy():
+    before = list(config.DEFAULT_CORS_ORIGINS)
     origins = config.load_cors_origins({})
     origins.append("http://evil.example")
-    assert config.DEFAULT_CORS_ORIGINS == ["http://localhost:5173"]
+    assert config.DEFAULT_CORS_ORIGINS == before
 
 
 def test_load_cors_origins_splits_and_strips():
@@ -36,4 +41,4 @@ def test_load_cors_origins_splits_and_strips():
 
 
 def test_load_cors_origins_default_when_env_only_separators():
-    assert config.load_cors_origins({config.CORS_ORIGINS_ENV: " , ,"}) == ["http://localhost:5173"]
+    assert config.load_cors_origins({config.CORS_ORIGINS_ENV: " , ,"}) == config.DEFAULT_CORS_ORIGINS

@@ -74,6 +74,14 @@ def test_create_rejects_out_of_range_coordinates(field, value):
         TripCreate(**VALID, **{field: value, partner: 0})
 
 
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("schema", [TripCreate, TripUpdate])
+def test_rejects_non_finite_coordinates(schema, value):
+    base = VALID if schema is TripCreate else {}
+    with pytest.raises(ValidationError, match="finite number"):
+        schema(**base, origin_lat=value, origin_lon=0)
+
+
 @pytest.mark.parametrize("field", ["origin_lat", "origin_lon", "destination_lat", "destination_lon"])
 def test_create_rejects_half_coordinate_pair(field):
     with pytest.raises(ValidationError, match="must be given together"):

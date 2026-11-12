@@ -14,8 +14,8 @@ Place = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=config.TRIP_PLACE_MAX_LENGTH)
 ]
 Notes = Annotated[str, StringConstraints(strip_whitespace=True, max_length=config.TRIP_NOTES_MAX_LENGTH)]
-Latitude = Annotated[float, Field(ge=config.LATITUDE_MIN, le=config.LATITUDE_MAX)]
-Longitude = Annotated[float, Field(ge=config.LONGITUDE_MIN, le=config.LONGITUDE_MAX)]
+Latitude = Annotated[float, Field(ge=config.LATITUDE_MIN, le=config.LATITUDE_MAX, allow_inf_nan=False)]
+Longitude = Annotated[float, Field(ge=config.LONGITUDE_MIN, le=config.LONGITUDE_MAX, allow_inf_nan=False)]
 
 COORDINATE_PAIRS = (("origin_lat", "origin_lon"), ("destination_lat", "destination_lon"))
 

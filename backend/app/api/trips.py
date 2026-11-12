@@ -2,9 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Path, status
 from sqlmodel import Session
 
+from app import config
 from app.db import get_session
 from app.schemas import TripCreate, TripRead, TripUpdate
 from app.services import trips as trip_service
@@ -12,6 +13,7 @@ from app.services import trips as trip_service
 router = APIRouter(prefix="/api/trips", tags=["trips"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
+TripId = Annotated[int, Path(ge=1, le=config.SQLITE_MAX_INTEGER)]
 
 
 @router.get("", response_model=list[TripRead])
@@ -25,15 +27,15 @@ def create_trip(data: TripCreate, session: SessionDep):
 
 
 @router.get("/{trip_id}", response_model=TripRead)
-def get_trip(trip_id: int, session: SessionDep):
+def get_trip(trip_id: TripId, session: SessionDep):
     return trip_service.get_trip(session, trip_id)
 
 
 @router.put("/{trip_id}", response_model=TripRead)
-def update_trip(trip_id: int, data: TripUpdate, session: SessionDep):
+def update_trip(trip_id: TripId, data: TripUpdate, session: SessionDep):
     return trip_service.update_trip(session, trip_id, data)
 
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_trip(trip_id: int, session: SessionDep) -> None:
+def delete_trip(trip_id: TripId, session: SessionDep) -> None:
     trip_service.delete_trip(session, trip_id)

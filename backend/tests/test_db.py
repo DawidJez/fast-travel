@@ -1,12 +1,8 @@
 from sqlalchemy import inspect, text
-from sqlmodel import Field, Session, SQLModel
+from sqlmodel import Session
 
 from app import db
-
-
-class _DbTestItem(SQLModel, table=True):
-    __tablename__ = "_db_test_item"
-    id: int | None = Field(default=None, primary_key=True)
+from app import models  # noqa: F401  (registers the real "trip" table)
 
 
 def test_make_engine_connects_to_sqlite():
@@ -19,13 +15,13 @@ def test_make_engine_connects_to_sqlite():
 def test_create_db_and_tables_creates_registered_tables(empty_engine):
     assert inspect(empty_engine).get_table_names() == []
     db.create_db_and_tables(empty_engine)
-    assert "_db_test_item" in inspect(empty_engine).get_table_names()
+    assert "trip" in inspect(empty_engine).get_table_names()
 
 
 def test_create_db_and_tables_uses_module_engine_by_default(empty_engine, monkeypatch):
     monkeypatch.setattr(db, "engine", empty_engine)
     db.create_db_and_tables()
-    assert "_db_test_item" in inspect(empty_engine).get_table_names()
+    assert "trip" in inspect(empty_engine).get_table_names()
 
 
 def test_get_session_yields_working_session_and_closes(empty_engine, monkeypatch):

@@ -68,6 +68,45 @@ def test_update_trip_changes_only_sent_fields(session):
     assert updated.notes == "keep me"
 
 
+def test_place_coordinates_mapping():
+    assert svc.PLACE_COORDINATES == {
+        "origin": ("origin_lat", "origin_lon"),
+        "destination": ("destination_lat", "destination_lon"),
+    }
+
+
+def test_update_trip_renamed_origin_clears_origin_coordinates_only(session):
+    trip = _create(session, origin_lat=50.06, origin_lon=19.94, destination_lat=49.98, destination_lon=20.06)
+    updated = svc.update_trip(session, trip.id, TripUpdate(origin="Tarnów"))
+    assert updated.origin == "Tarnów"
+    assert updated.origin_lat is None and updated.origin_lon is None
+    assert (updated.destination_lat, updated.destination_lon) == (49.98, 20.06)
+
+
+def test_update_trip_renamed_destination_clears_destination_coordinates(session):
+    trip = _create(session, destination_lat=49.98, destination_lon=20.06)
+    updated = svc.update_trip(session, trip.id, TripUpdate(destination="Bochnia"))
+    assert updated.destination_lat is None and updated.destination_lon is None
+
+
+def test_update_trip_rename_with_new_coordinates_keeps_them(session):
+    trip = _create(session, origin_lat=50.06, origin_lon=19.94)
+    updated = svc.update_trip(session, trip.id, TripUpdate(origin="Tarnów", origin_lat=50.01, origin_lon=20.99))
+    assert (updated.origin_lat, updated.origin_lon) == (50.01, 20.99)
+
+
+def test_update_trip_same_place_name_keeps_coordinates(session):
+    trip = _create(session, origin_lat=50.06, origin_lon=19.94)
+    updated = svc.update_trip(session, trip.id, TripUpdate(origin="Kraków"))
+    assert (updated.origin_lat, updated.origin_lon) == (50.06, 19.94)
+
+
+def test_update_trip_other_fields_keep_coordinates(session):
+    trip = _create(session, origin_lat=50.06, origin_lon=19.94)
+    updated = svc.update_trip(session, trip.id, TripUpdate(name="Home", notes="x"))
+    assert (updated.origin_lat, updated.origin_lon) == (50.06, 19.94)
+
+
 def test_update_trip_can_clear_optional_fields(session):
     trip = _create(session, notes="x", origin_lat=50.0, origin_lon=19.0)
     updated = svc.update_trip(session, trip.id, TripUpdate(notes=None, origin_lat=None, origin_lon=None))

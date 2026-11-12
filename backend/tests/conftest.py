@@ -42,4 +42,4 @@ def client(engine):
 
     app.dependency_overrides[db.get_session] = override_get_session
     yield TestClient(app)
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(db.get_session, None)

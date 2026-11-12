@@ -26,6 +26,11 @@ TRIP_NOTES_MAX_LENGTH = 1000
 LATITUDE_MIN, LATITUDE_MAX = -90.0, 90.0
 LONGITUDE_MIN, LONGITUDE_MAX = -180.0, 180.0
 
+# Source: SQLite INTEGER is a signed 64-bit value (https://www.sqlite.org/datatype3.html);
+# larger ids cannot exist and would crash the driver, so the API rejects them up front.
+SQLITE_MAX_INTEGER = 2**63 - 1
+
+# Source: project decision — env var names, prefixed with the app name to avoid clashes.
 DB_PATH_ENV = "FAST_TRAVEL_DB_PATH"
 CORS_ORIGINS_ENV = "FAST_TRAVEL_CORS_ORIGINS"  # comma-separated list
 

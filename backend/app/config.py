@@ -45,6 +45,23 @@ WEATHER_CURRENT_VARIABLES = "temperature_2m,precipitation,wind_speed_10m"
 # Source: project decision — same fail-fast limit as geocoding.
 WEATHER_TIMEOUT_SECONDS = 5.0
 
+# --- Recommendation: weather limits for walking / cycling ---------------------
+
+# Source: WMO CIMO Guide (WMO-No. 8), ch. 6: amounts below 0.1 mm are a "trace";
+# 0.1 mm is the smallest measurable precipitation. Applied to Open-Meteo's 15-min sum.
+RAIN_THRESHOLD_MM = 0.1
+# Source: Beaufort scale force 6 "strong breeze" starts at 39 km/h (22 kn)
+# (Met Office, https://weather.metoffice.gov.uk/guides/coast-and-sea/beaufort-scale; MeteoSwiss table).
+STRONG_WIND_THRESHOLD_KMH = 39.0
+# Source: frost = air temperature below the freezing point of water, 0 °C (risk of ice on paths).
+FROST_THRESHOLD_C = 0.0
+
+# Source: acceptable one-way travel time by mode, Milakis & van Wee (2018, Delft vs Berkeley):
+# walking 25-38.8 min, cycling 31.3-48.8 min (via saferoutespartnership.org, "Exploring
+# acceptable travel time"). Mid-range values; slower walk/bike options are not recommended.
+MAX_WALK_MINUTES = 30.0
+MAX_BIKE_MINUTES = 40.0
+
 # --- Distance ---------------------------------------------------------------
 
 # Source: IUGG mean Earth radius R1 = 6371.0088 km (Moritz, "Geodetic Reference System 1980",
@@ -57,6 +74,13 @@ EARTH_RADIUS_KM = 6371.0088
 # national factors in Ballou, Rahardja & Sakai, Transportation Research A 36(9), 2002.
 # Rounded up to 1.3 (project spec) because urban commutes are more circuitous than intercity links.
 DETOUR_FACTOR = 1.3
+
+# Source: walking networks allow more direct routes than driving networks in almost all cities;
+# network distance is at least ~14% longer than straight line (Boeing, "The Morphology and
+# Circuity of Walkable and Drivable Street Networks", arXiv:1708.00836, 2019).
+# 1.2 = between that 1.14 floor and the 1.3 used for roads (paths, crossings, cut-throughs).
+WALK_DETOUR_FACTOR = 1.2
+BIKE_DETOUR_FACTOR = 1.2
 
 # --- Transport modes: speed (km/h), door-to-door averages --------------------
 
@@ -78,6 +102,49 @@ BIKE_SPEED_KMH = 15.0
 # Source: Bohannon, "Comfortable and maximum walking speed of adults aged 20-79 years",
 # Age and Ageing 26(1), 1997: mean comfortable speed 1.27-1.46 m/s (4.6-5.3 km/h).
 WALK_SPEED_KMH = 5.0
+
+# --- Transport modes: fixed time per trip (minutes), added to driving/riding time ---
+
+# Source: mean parking search time 3.57 min across six European studies (range 1.18-11.10)
+# (hEART 2025 short paper 64, https://transp-or.epfl.ch/heart/2025/abstracts/hEART_2025_shortpaper_64.pdf).
+# Rounded to 4 min. Walking from the parking spot is not included.
+CAR_OVERHEAD_MINUTES = 4.0
+
+# Source: average walking distance to a stop in Polish cities 390 m (Jakdojade data via auto-swiat.pl,
+# "Auto czy autobus? Czy zbiorkom może zastąpić auto w każdej sytuacji?"), walked at both ends.
+PUBLIC_TRANSPORT_STOP_DISTANCE_M = 390.0
+# Source: ASSUMPTION — half-headway rule (Ansari Esfeh et al. 2021) with a 10-minute daytime
+# headway; not measured for Gdańsk. Replace with local data when available.
+PUBLIC_TRANSPORT_WAIT_MINUTES = 5.0
+# Derived: walk to the stop + walk from the stop + wait = 2 x 390 m at WALK_SPEED_KMH + 5 = ~14.4 min.
+PUBLIC_TRANSPORT_OVERHEAD_MINUTES = (
+    2 * PUBLIC_TRANSPORT_STOP_DISTANCE_M / 1000 / WALK_SPEED_KMH * 60 + PUBLIC_TRANSPORT_WAIT_MINUTES
+)
+
+# Source: door to door — no parking search, no stop. (Locking a bike is under a minute; ignored.)
+BIKE_OVERHEAD_MINUTES = 0.0
+WALK_OVERHEAD_MINUTES = 0.0
+
+# --- Car rush hour --------------------------------------------------------------
+
+# Source: project decision (owner) — local time zone of the commutes.
+LOCAL_TIMEZONE = "Europe/Warsaw"
+# Source: project decision (owner) — morning and afternoon peaks, local time, [start, end).
+CAR_PEAK_WINDOWS = (("07:30", "08:30"), ("15:00", "17:00"))
+# Source: project decision (owner): +8-15 min in peak; the midpoint 11.5 is used because time
+# must be deterministic (CLAUDE.md). Consistent with TomTom 2025 Gdańsk rush hour being slower
+# (17.5 vs 25.6 km/h all-day -> ~+10 min on 10 km).
+CAR_PEAK_PENALTY_MINUTES = 11.5
+
+# Source: Natural Resources Canada idling model: 0.6 L/h per litre of engine displacement
+# (https://www.nrcan.gc.ca/energy/efficiency/communities-infrastructure/transportation/idling/4457).
+# ASSUMPTION: typical 1.5 L petrol engine -> 0.9 L/h (UK fleet guides quote 0.5-1 L/h for cars).
+CAR_IDLE_FUEL_L_PER_HOUR = 0.6 * 1.5
+# Source: UK DESNZ GHG conversion factors 2025, "Petrol (average biofuel blend)" = 2.06916 kg CO2e/litre.
+PETROL_CO2_G_PER_LITRE = 2069.16
+# Derived: the peak penalty minutes are spent idling in traffic ->
+# 11.5 / 60 h x 0.9 L/h x 2069 g/L = ~357 g CO2e extra per car trip in rush hour.
+CAR_PEAK_EXTRA_CO2_G = CAR_PEAK_PENALTY_MINUTES / 60 * CAR_IDLE_FUEL_L_PER_HOUR * PETROL_CO2_G_PER_LITRE
 
 # --- Transport modes: cost (PLN) ---------------------------------------------
 

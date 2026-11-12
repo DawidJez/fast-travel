@@ -13,15 +13,15 @@ def utc_now() -> datetime:
 
 
 class Trip(SQLModel, table=True):
-    """A saved trip. Coordinates are optional until geocoding fills them."""
+    """A saved trip. Coordinates are always present: the server geocodes on save."""
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(max_length=config.TRIP_NAME_MAX_LENGTH)
     origin: str = Field(max_length=config.TRIP_PLACE_MAX_LENGTH)
     destination: str = Field(max_length=config.TRIP_PLACE_MAX_LENGTH)
     notes: str | None = Field(default=None, max_length=config.TRIP_NOTES_MAX_LENGTH)
-    origin_lat: float | None = None
-    origin_lon: float | None = None
-    destination_lat: float | None = None
-    destination_lon: float | None = None
+    origin_lat: float
+    origin_lon: float
+    destination_lat: float
+    destination_lon: float
     created_at: datetime = Field(default_factory=utc_now)

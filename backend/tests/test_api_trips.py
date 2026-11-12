@@ -12,14 +12,19 @@ def _post(client, **overrides):
 # --- POST /api/trips ---
 
 def test_create_returns_201_and_trip(client):
-    response = _post(client, notes="n", origin_lat=50.06, origin_lon=19.94)
+    response = _post(client, notes="n")
     assert response.status_code == 201
     body = response.json()
     assert body["id"] > 0
     assert body["name"] == "Work"
-    assert body["origin_lat"] == 50.06
-    assert (body["destination_lat"], body["destination_lon"]) == (49.9874, 20.0647)  # geocoded
+    assert (body["origin_lat"], body["origin_lon"]) == (50.0614, 19.9366)  # geocoded
     assert body["created_at"].endswith(("Z", "+00:00"))
+
+
+def test_create_ignores_client_coordinates(client):
+    body = _post(client, origin_lat=1.0, origin_lon=2.0, destination_lat=3.0, destination_lon=4.0).json()
+    assert (body["origin_lat"], body["origin_lon"]) == (50.0614, 19.9366)
+    assert (body["destination_lat"], body["destination_lon"]) == (49.9874, 20.0647)
 
 
 def test_create_geocodes_places_without_coordinates(client, geocoder):
@@ -51,8 +56,6 @@ def test_create_geocoding_unavailable_returns_503_and_saves_nothing(client, geoc
         {"name": "Work", "origin": "Kraków"},
         {**VALID, "name": "   "},
         {**VALID, "name": "x" * 101},
-        {**VALID, "origin_lat": 91, "origin_lon": 0},
-        {**VALID, "origin_lat": 50.0},
         {**VALID, "name": 123},
     ],
 )
@@ -61,11 +64,11 @@ def test_create_invalid_input_returns_422(client, payload):
 
 
 @pytest.mark.parametrize("bad", ["NaN", "Infinity", "-Infinity"])
-def test_create_non_finite_coordinate_returns_422_not_500(client, bad):
-    body = '{"name": "a", "origin": "b", "destination": "c", "origin_lat": %s, "origin_lon": 1}' % bad
+def test_create_non_finite_value_in_validated_field_returns_422_not_500(client, bad):
+    body = '{"name": %s, "origin": "Kraków", "destination": "Wieliczka"}' % bad
     response = client.post("/api/trips", content=body, headers={"Content-Type": "application/json"})
     assert response.status_code == 422
-    assert response.json()["detail"][0]["loc"] == ["body", "origin_lat"]
+    assert response.json()["detail"][0]["loc"] == ["body", "name"]
 
 
 def test_create_nan_in_text_field_returns_422_not_500(client):
@@ -130,28 +133,34 @@ def test_update_missing_returns_404(client):
 
 @pytest.mark.parametrize(
     "payload",
-    [{"name": None}, {"name": " "}, {"origin_lat": 50.0}, {"destination_lat": 0, "destination_lon": 181}],
+    [{"name": None}, {"name": " "}, {"origin": None}, {"destination": "  "}],
 )
 def test_update_invalid_input_returns_422(client, payload):
     trip_id = _post(client).json()["id"]
     assert client.put(f"/api/trips/{trip_id}", json=payload).status_code == 422
 
 
-def test_update_full_coordinate_pair(client):
+def test_update_ignores_client_coordinates(client):
     trip_id = _post(client).json()["id"]
-    response = client.put(f"/api/trips/{trip_id}", json={"destination_lat": 49.98, "destination_lon": 20.06})
-    assert response.status_code == 200
-    body = response.json()
-    assert (body["destination_lat"], body["destination_lon"]) == (49.98, 20.06)
+    body = client.put(f"/api/trips/{trip_id}", json={"origin_lat": 1.0, "origin_lon": 2.0}).json()
     assert (body["origin_lat"], body["origin_lon"]) == (50.0614, 19.9366)
 
 
-def test_update_renamed_place_replaces_its_stale_coordinates(client):
-    trip_id = _post(client, origin_lat=50.06, origin_lon=19.94, destination_lat=49.98, destination_lon=20.06).json()["id"]
+def test_update_renamed_place_is_geocoded_again(client, geocoder):
+    trip_id = _post(client).json()["id"]
+    geocoder.calls.clear()
     body = client.put(f"/api/trips/{trip_id}", json={"origin": "Tarnów"}).json()
     assert body["origin"] == "Tarnów"
     assert (body["origin_lat"], body["origin_lon"]) == (50.0121, 20.9858)
-    assert (body["destination_lat"], body["destination_lon"]) == (49.98, 20.06)
+    assert (body["destination_lat"], body["destination_lon"]) == (49.9874, 20.0647)
+    assert geocoder.calls == ["Tarnów"]
+
+
+def test_update_same_place_name_does_not_geocode(client, geocoder):
+    trip_id = _post(client).json()["id"]
+    geocoder.calls.clear()
+    assert client.put(f"/api/trips/{trip_id}", json={"origin": "Kraków", "name": "X"}).status_code == 200
+    assert geocoder.calls == []
 
 
 def test_update_unknown_place_returns_422_and_keeps_trip(client):

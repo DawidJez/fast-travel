@@ -60,8 +60,8 @@ def update_trip(trip_id: TripId, data: TripUpdate, session: SessionDep, geocoder
 
 
 @router.get("/{trip_id}/comparison", response_model=TripComparisonRead)
-def compare_trip(trip_id: TripId, session: SessionDep, geocoder: GeocoderDep, weather_provider: WeatherDep, now: NowDep):
-    return comparison_service.compare_trip(session, trip_id, geocoder, weather_provider, now)
+def compare_trip(trip_id: TripId, session: SessionDep, weather_provider: WeatherDep, now: NowDep):
+    return comparison_service.compare_trip(session, trip_id, weather_provider, now)
 
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)

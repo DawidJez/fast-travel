@@ -60,6 +60,7 @@ DEFAULT_NOW = datetime(2026, 11, 12, 12, 0, tzinfo=ZoneInfo("Europe/Warsaw"))
 
 @pytest.fixture
 def geocoder():
+    """The single geocoder mock: knows KNOWN_PLACES; set `.error = ...` to simulate a failure."""
     return FakeGeocoder()
 
 
@@ -76,12 +77,6 @@ def clock():
         now = DEFAULT_NOW
 
     return Clock()
-
-
-@pytest.fixture
-def make_geocoder():
-    """Factory for a custom fake, e.g. make_geocoder(error=GeocodingUnavailableError("down"))."""
-    return FakeGeocoder
 
 
 @pytest.fixture

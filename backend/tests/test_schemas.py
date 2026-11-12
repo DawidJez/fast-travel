@@ -17,7 +17,6 @@ def test_create_minimal_valid():
     trip = TripCreate(**VALID)
     assert trip.name == "Work"
     assert trip.notes is None
-    assert trip.origin_lat is None
 
 
 def test_create_strips_whitespace():
@@ -58,39 +57,9 @@ def test_create_notes_stripped_and_blank_becomes_none():
     assert TripCreate(**VALID, notes="   ").notes is None
 
 
-def test_create_accepts_coordinates_at_bounds():
-    trip = TripCreate(**VALID, origin_lat=-90, origin_lon=180, destination_lat=90, destination_lon=-180)
-    assert (trip.origin_lat, trip.origin_lon) == (-90, 180)
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [("origin_lat", 90.1), ("destination_lat", -90.1), ("origin_lon", 180.1), ("destination_lon", -180.1)],
-)
-def test_create_rejects_out_of_range_coordinates(field, value):
-    partner = {"origin_lat": "origin_lon", "origin_lon": "origin_lat",
-               "destination_lat": "destination_lon", "destination_lon": "destination_lat"}[field]
-    with pytest.raises(ValidationError):
-        TripCreate(**VALID, **{field: value, partner: 0})
-
-
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
-@pytest.mark.parametrize("schema", [TripCreate, TripUpdate])
-def test_rejects_non_finite_coordinates(schema, value):
-    base = VALID if schema is TripCreate else {}
-    with pytest.raises(ValidationError, match="finite number"):
-        schema(**base, origin_lat=value, origin_lon=0)
-
-
-@pytest.mark.parametrize("field", ["origin_lat", "origin_lon", "destination_lat", "destination_lon"])
-def test_create_rejects_half_coordinate_pair(field):
-    with pytest.raises(ValidationError, match="must be given together"):
-        TripCreate(**VALID, **{field: 10.0})
-
-
-def test_create_accepts_one_full_pair_only():
-    trip = TripCreate(**VALID, origin_lat=50.06, origin_lon=19.94)
-    assert trip.destination_lat is None and trip.destination_lon is None
+def test_create_ignores_client_coordinates():
+    trip = TripCreate(**VALID, origin_lat=1.0, origin_lon=2.0, destination_lat=3.0, destination_lon=4.0)
+    assert set(trip.model_dump()) == {"name", "origin", "destination", "notes"}
 
 
 def test_create_ignores_server_fields():
@@ -106,25 +75,13 @@ def test_update_empty_is_valid_and_sets_nothing():
 
 
 def test_update_partial_only_sent_fields():
-    update = TripUpdate(name=" Home ", origin_lat=50.06, origin_lon=19.94)
-    assert update.model_dump(exclude_unset=True) == {"name": "Home", "origin_lat": 50.06, "origin_lon": 19.94}
+    update = TripUpdate(name=" Home ", origin="Tarnów")
+    assert update.model_dump(exclude_unset=True) == {"name": "Home", "origin": "Tarnów"}
 
 
-@pytest.mark.parametrize("field", ["origin_lat", "origin_lon", "destination_lat", "destination_lon"])
-def test_update_rejects_half_coordinate_pair(field):
-    with pytest.raises(ValidationError, match="must be (given|sent) together"):
-        TripUpdate(**{field: 10.0})
-
-
-@pytest.mark.parametrize("field", ["origin_lat", "destination_lon"])
-def test_update_rejects_clearing_half_coordinate_pair(field):
-    with pytest.raises(ValidationError, match="must be sent together"):
-        TripUpdate(**{field: None})
-
-
-def test_update_rejects_pair_with_one_null():
-    with pytest.raises(ValidationError, match="must be given together"):
-        TripUpdate(origin_lat=50.06, origin_lon=None)
+def test_update_ignores_client_coordinates():
+    update = TripUpdate(name="Home", origin_lat=1.0, origin_lon=2.0)
+    assert update.model_dump(exclude_unset=True) == {"name": "Home"}
 
 
 @pytest.mark.parametrize("field", ["name", "origin", "destination"])
@@ -139,21 +96,15 @@ def test_update_rejects_blank_required_field(field):
         TripUpdate(**{field: "  "})
 
 
-def test_update_allows_clearing_optional_fields():
-    update = TripUpdate(notes=None, origin_lat=None, origin_lon=None)
-    assert update.model_dump(exclude_unset=True) == {"notes": None, "origin_lat": None, "origin_lon": None}
-
-
-def test_update_rejects_out_of_range_coordinates():
-    with pytest.raises(ValidationError):
-        TripUpdate(destination_lat=0, destination_lon=200)
+def test_update_allows_clearing_notes():
+    assert TripUpdate(notes=None).model_dump(exclude_unset=True) == {"notes": None}
 
 
 # --- TripRead ---
 
 def test_read_from_db_object_has_utc_created_at(engine):
     with Session(engine) as session:
-        trip = Trip(**VALID, notes="n", origin_lat=50.06, origin_lon=19.94)
+        trip = Trip(**VALID, notes="n", origin_lat=50.06, origin_lon=19.94, destination_lat=49.99, destination_lon=20.06)
         session.add(trip)
         session.commit()
         session.refresh(trip)
@@ -162,7 +113,7 @@ def test_read_from_db_object_has_utc_created_at(engine):
     assert read.id == trip.id
     assert read.name == "Work"
     assert read.origin_lat == 50.06
-    assert read.destination_lat is None
+    assert read.destination_lat == 49.99
     assert read.created_at.tzinfo is not None
     assert read.created_at.utcoffset().total_seconds() == 0
 

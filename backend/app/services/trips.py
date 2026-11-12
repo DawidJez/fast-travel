@@ -1,4 +1,9 @@
-"""Trip CRUD logic. Routers call these functions and contain no logic of their own."""
+"""Trip CRUD logic. Routers call these functions and contain no logic of their own.
+
+Coordinates are set only by the server: geocoded on create, and on update only for
+a place whose name changed. Geocoding runs before anything is changed, so a failure
+(GeocodingError) leaves the database untouched.
+"""
 
 from collections.abc import Callable
 
@@ -6,7 +11,7 @@ from sqlmodel import Session, col, select
 
 from app.models import Trip
 from app.schemas import TripCreate, TripUpdate
-from app.services.geo import Coordinates, GeocodingError
+from app.services.geo import Coordinates
 
 # Place name -> coordinates; app.services.geo.geocode in production, a fake in tests.
 Geocoder = Callable[[str], Coordinates]
@@ -26,26 +31,28 @@ class TripNotFoundError(Exception):
         super().__init__(f"Trip {trip_id} not found")
 
 
-def fill_missing_coordinates(trip: Trip, geocoder: Geocoder) -> None:
-    """Geocode every place of `trip` that has no coordinates yet (in place).
+def geocode_places(places: dict[str, str], geocoder: Geocoder) -> dict[str, float]:
+    """Geocode {"origin": name, ...} into {"origin_lat": .., "origin_lon": .., ...}.
 
-    Raises GeocodingError (place not found / service unavailable); the trip may be
-    partially filled then, so callers must not commit it.
+    Raises GeocodingError (place not found / service unavailable) on the first failure.
     """
-    for place, (lat, lon) in PLACE_COORDINATES.items():
-        if getattr(trip, lat) is None:
-            point = geocoder(getattr(trip, place))
-            setattr(trip, lat, point.lat)
-            setattr(trip, lon, point.lon)
+    coordinates: dict[str, float] = {}
+    for place, name in places.items():
+        lat, lon = PLACE_COORDINATES[place]
+        point = geocoder(name)
+        coordinates[lat] = point.lat
+        coordinates[lon] = point.lon
+    return coordinates
 
 
 def create_trip(session: Session, data: TripCreate, geocoder: Geocoder) -> Trip:
-    """Save a new trip; places sent without coordinates are geocoded first.
+    """Geocode origin and destination, then save the trip.
 
     Raises GeocodingError and saves nothing if a place cannot be geocoded.
     """
-    trip = Trip(**data.model_dump())
-    fill_missing_coordinates(trip, geocoder)
+    fields = data.model_dump()
+    coordinates = geocode_places({place: fields[place] for place in PLACE_COORDINATES}, geocoder)
+    trip = Trip(**fields, **coordinates)
     session.add(trip)
     session.commit()
     session.refresh(trip)
@@ -69,23 +76,19 @@ def get_trip(session: Session, trip_id: int) -> Trip:
 def update_trip(session: Session, trip_id: int, data: TripUpdate, geocoder: Geocoder) -> Trip:
     """Apply only the fields that were sent; raise TripNotFoundError if missing.
 
-    If a place name changes and no new coordinates for it are sent, its old
-    coordinates are dropped and the new name is geocoded, so they never point at
-    the previous place. Raises GeocodingError and leaves the stored trip unchanged
-    if geocoding fails.
+    A place whose name changed is geocoded again; an unchanged name keeps its
+    coordinates without calling the geocoder. Raises GeocodingError and leaves the
+    stored trip unchanged if geocoding fails.
     """
     trip = get_trip(session, trip_id)
     changes = data.model_dump(exclude_unset=True)
-    for place, (lat, lon) in PLACE_COORDINATES.items():
-        renamed = place in changes and changes[place] != getattr(trip, place)
-        if renamed and lat not in changes:
-            changes[lat] = changes[lon] = None
+    renamed = {
+        place: changes[place]
+        for place in PLACE_COORDINATES
+        if place in changes and changes[place] != getattr(trip, place)
+    }
+    changes.update(geocode_places(renamed, geocoder))  # may raise before anything is modified
     trip.sqlmodel_update(changes)
-    try:
-        fill_missing_coordinates(trip, geocoder)
-    except GeocodingError:
-        session.rollback()  # discard the in-memory edits; the stored row is untouched
-        raise
     session.add(trip)
     session.commit()
     session.refresh(trip)

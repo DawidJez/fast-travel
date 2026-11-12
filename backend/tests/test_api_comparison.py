@@ -4,10 +4,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlmodel import Session
-
 from app import config
-from app.models import Trip
 from app.services.geo import GeocodingUnavailableError
 from app.services.weather import Weather, WeatherUnavailableError
 
@@ -38,7 +35,7 @@ def test_comparison_returns_200_with_full_body(client):
     assert body["weather"] == {"temperature_c": 12.0, "precipitation_mm": 0.0, "wind_speed_kmh": 10.0}
     assert [m["mode"] for m in body["modes"]] == ["walk", "bike", "car", "public_transport"]
     for row in body["modes"]:
-        assert set(row) == {"mode", "distance_km", "time_minutes", "cost_pln", "co2_grams"}
+        assert set(row) == {"mode", "distance_km", "time_minutes", "cost_pln", "co2_grams", "estimate", "note"}
         assert isinstance(row["co2_grams"], int)
     assert set(body["recommendation"]) == {"mode", "reason"}
     assert body["recommendation"]["mode"] in {"walk", "bike", "car", "public_transport"}
@@ -100,39 +97,32 @@ def test_comparison_invalid_id_returns_422(client, bad_id):
     assert _compare(client, bad_id).status_code == 422
 
 
-def _legacy_trip(engine, **fields):
-    """A trip saved without coordinates (bypasses geocoding-on-save)."""
-    with Session(engine) as session:
-        trip = Trip(name="Old", origin="Kraków", destination="Wieliczka", **fields)
-        session.add(trip)
-        session.commit()
-        return trip.id
-
-
-def test_comparison_geocodes_legacy_trip_and_saves_coordinates(client, engine, geocoder):
-    trip_id = _legacy_trip(engine)
+def test_comparison_does_not_call_geocoder(client, geocoder):
+    trip_id = _create(client)
+    geocoder.calls.clear()
     assert _compare(client, trip_id).status_code == 200
-    assert geocoder.calls == ["Kraków", "Wieliczka"]
-    assert client.get(f"/api/trips/{trip_id}").json()["origin_lat"] == 50.0614
+    assert geocoder.calls == []
 
 
-def test_comparison_place_not_found_returns_422(client, engine):
-    with Session(engine) as session:
-        trip = Trip(name="X", origin="Atlantyda", destination="Kraków")
-        session.add(trip)
-        session.commit()
-        trip_id = trip.id
-    response = _compare(client, trip_id)
-    assert response.status_code == 422
-    assert response.json() == {"detail": "Place not found: 'Atlantyda'"}
+def test_comparison_works_while_geocoding_is_down(client, geocoder):
+    trip_id = _create(client)
+    geocoder.error = GeocodingUnavailableError("down")
+    assert _compare(client, trip_id).status_code == 200
 
 
-def test_comparison_geocoding_unavailable_returns_503(client, engine, geocoder):
-    trip_id = _legacy_trip(engine)
-    geocoder.error = GeocodingUnavailableError("Geocoding service did not answer within 5 s")
-    response = _compare(client, trip_id)
-    assert response.status_code == 503
-    assert response.json() == {"detail": "Geocoding service did not answer within 5 s"}
+def test_comparison_does_not_change_the_trip(client):
+    trip_id = _create(client)
+    before = client.get(f"/api/trips/{trip_id}").json()
+    _compare(client, trip_id)
+    assert client.get(f"/api/trips/{trip_id}").json() == before
+
+
+def test_comparison_public_transport_flagged_as_estimate(client):
+    rows = {m["mode"]: m for m in _compare(client, _create(client)).json()["modes"]}
+    assert rows["public_transport"]["estimate"] is True
+    assert "bez rozkładów jazdy i kolei (np. SKM)" in rows["public_transport"]["note"]
+    for mode in ("walk", "bike", "car"):
+        assert (rows[mode]["estimate"], rows[mode]["note"]) == (False, None)
 
 
 # --- dependencies ---

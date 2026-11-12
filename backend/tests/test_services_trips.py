@@ -39,48 +39,48 @@ def test_place_coordinates_mapping():
     }
 
 
-# --- fill_missing_coordinates ---
+# --- geocode_places ---
 
-def test_fill_missing_coordinates_geocodes_both_places(geocoder):
-    trip = Trip(name="W", origin="Kraków", destination="Wieliczka")
-    svc.fill_missing_coordinates(trip, geocoder)
-    assert _origin(trip) == KRAKOW and _destination(trip) == WIELICZKA
+def test_geocode_places_both(geocoder):
+    coords = svc.geocode_places({"origin": "Kraków", "destination": "Wieliczka"}, geocoder)
+    assert coords == {
+        "origin_lat": KRAKOW[0], "origin_lon": KRAKOW[1],
+        "destination_lat": WIELICZKA[0], "destination_lon": WIELICZKA[1],
+    }
     assert geocoder.calls == ["Kraków", "Wieliczka"]
 
 
-def test_fill_missing_coordinates_keeps_existing_and_skips_geocoding(geocoder):
-    trip = Trip(name="W", origin="Kraków", destination="Wieliczka", origin_lat=1.0, origin_lon=2.0)
-    svc.fill_missing_coordinates(trip, geocoder)
-    assert _origin(trip) == (1.0, 2.0)
-    assert geocoder.calls == ["Wieliczka"]
+def test_geocode_places_one(geocoder):
+    assert svc.geocode_places({"destination": "Bochnia"}, geocoder) == {
+        "destination_lat": BOCHNIA[0], "destination_lon": BOCHNIA[1],
+    }
 
 
-def test_fill_missing_coordinates_nothing_missing_no_calls(geocoder):
-    trip = Trip(name="W", origin="A", destination="B", origin_lat=1, origin_lon=2, destination_lat=3, destination_lon=4)
-    svc.fill_missing_coordinates(trip, geocoder)
+def test_geocode_places_empty_makes_no_calls(geocoder):
+    assert svc.geocode_places({}, geocoder) == {}
     assert geocoder.calls == []
 
 
-def test_fill_missing_coordinates_propagates_errors(geocoder):
+def test_geocode_places_propagates_errors(geocoder):
     with pytest.raises(PlaceNotFoundError):
-        svc.fill_missing_coordinates(Trip(name="W", origin="Atlantyda", destination="Kraków"), geocoder)
+        svc.geocode_places({"origin": "Atlantyda"}, geocoder)
 
 
 # --- create ---
 
-def test_create_trip_geocodes_and_persists(session, geocoder):
+def test_create_trip_geocodes_both_places_and_persists(session, geocoder):
     trip = _create(session, geocoder, notes="n")
     assert trip.id is not None and trip.created_at is not None
     stored = session.get(Trip, trip.id)
     assert (stored.name, stored.notes) == ("Work", "n")
     assert _origin(stored) == KRAKOW and _destination(stored) == WIELICZKA
+    assert geocoder.calls == ["Kraków", "Wieliczka"]
 
 
-def test_create_trip_keeps_sent_coordinates(session, geocoder):
-    trip = _create(session, geocoder, origin_lat=50.06, origin_lon=19.94)
-    assert _origin(trip) == (50.06, 19.94)
-    assert _destination(trip) == WIELICZKA
-    assert geocoder.calls == ["Wieliczka"]
+def test_create_trip_ignores_client_coordinates(session, geocoder):
+    data = TripCreate(name="W", origin="Kraków", destination="Wieliczka", origin_lat=1.0, origin_lon=2.0)
+    trip = svc.create_trip(session, data, geocoder)
+    assert _origin(trip) == KRAKOW
 
 
 def test_create_trip_unknown_place_saves_nothing(session, geocoder):
@@ -89,9 +89,10 @@ def test_create_trip_unknown_place_saves_nothing(session, geocoder):
     assert svc.list_trips(session) == []
 
 
-def test_create_trip_geocoding_unavailable_saves_nothing(session, make_geocoder):
+def test_create_trip_geocoding_unavailable_saves_nothing(session, geocoder):
+    geocoder.error = GeocodingUnavailableError("down")
     with pytest.raises(GeocodingUnavailableError):
-        _create(session, make_geocoder(error=GeocodingUnavailableError("down")))
+        _create(session, geocoder)
     assert svc.list_trips(session) == []
 
 
@@ -133,15 +134,17 @@ def test_get_trip_missing_raises(session):
 
 # --- update ---
 
-def test_update_trip_changes_only_sent_fields(session, geocoder):
+def test_update_trip_changes_only_sent_fields_without_geocoding(session, geocoder):
     trip = _create(session, geocoder, notes="keep me")
+    geocoder.calls.clear()
     updated = svc.update_trip(session, trip.id, TripUpdate(name="Home"), geocoder)
     assert updated.name == "Home"
     assert updated.origin == "Kraków"
     assert updated.notes == "keep me"
+    assert geocoder.calls == []
 
 
-def test_update_trip_renamed_origin_regeocodes_origin_only(session, geocoder):
+def test_update_trip_renamed_origin_geocodes_origin_only(session, geocoder):
     trip = _create(session, geocoder)
     geocoder.calls.clear()
     updated = svc.update_trip(session, trip.id, TripUpdate(origin="Tarnów"), geocoder)
@@ -151,37 +154,32 @@ def test_update_trip_renamed_origin_regeocodes_origin_only(session, geocoder):
     assert geocoder.calls == ["Tarnów"]
 
 
-def test_update_trip_renamed_destination_regeocodes_destination(session, geocoder):
+def test_update_trip_renamed_destination_geocodes_destination(session, geocoder):
     trip = _create(session, geocoder)
     updated = svc.update_trip(session, trip.id, TripUpdate(destination="Bochnia"), geocoder)
     assert _destination(updated) == BOCHNIA
+    assert _origin(updated) == KRAKOW
 
 
-def test_update_trip_rename_with_new_coordinates_keeps_them_without_geocoding(session, geocoder):
+def test_update_trip_both_renamed_geocodes_both(session, geocoder):
     trip = _create(session, geocoder)
     geocoder.calls.clear()
-    updated = svc.update_trip(session, trip.id, TripUpdate(origin="Tarnów", origin_lat=50.01, origin_lon=20.99), geocoder)
-    assert _origin(updated) == (50.01, 20.99)
-    assert geocoder.calls == []
+    updated = svc.update_trip(session, trip.id, TripUpdate(origin="Tarnów", destination="Bochnia"), geocoder)
+    assert _origin(updated) == TARNOW and _destination(updated) == BOCHNIA
+    assert geocoder.calls == ["Tarnów", "Bochnia"]
 
 
-def test_update_trip_same_place_name_keeps_coordinates(session, geocoder):
-    trip = _create(session, geocoder, origin_lat=50.06, origin_lon=19.94)
+def test_update_trip_same_place_name_does_not_geocode(session, geocoder):
+    trip = _create(session, geocoder)
     geocoder.calls.clear()
-    updated = svc.update_trip(session, trip.id, TripUpdate(origin="Kraków"), geocoder)
-    assert _origin(updated) == (50.06, 19.94)
+    updated = svc.update_trip(session, trip.id, TripUpdate(origin="Kraków", destination="Wieliczka"), geocoder)
+    assert _origin(updated) == KRAKOW
     assert geocoder.calls == []
 
 
-def test_update_trip_other_fields_keep_coordinates(session, geocoder):
-    trip = _create(session, geocoder, origin_lat=50.06, origin_lon=19.94)
-    updated = svc.update_trip(session, trip.id, TripUpdate(name="Home", notes="x"), geocoder)
-    assert _origin(updated) == (50.06, 19.94)
-
-
-def test_update_trip_cleared_coordinates_are_geocoded_again(session, geocoder):
-    trip = _create(session, geocoder, origin_lat=1.0, origin_lon=2.0)
-    updated = svc.update_trip(session, trip.id, TripUpdate(origin_lat=None, origin_lon=None), geocoder)
+def test_update_trip_ignores_client_coordinates(session, geocoder):
+    trip = _create(session, geocoder)
+    updated = svc.update_trip(session, trip.id, TripUpdate(origin_lat=1.0, origin_lon=2.0), geocoder)
     assert _origin(updated) == KRAKOW
 
 
@@ -190,11 +188,14 @@ def test_update_trip_can_clear_notes(session, geocoder):
     assert svc.update_trip(session, trip.id, TripUpdate(notes=None), geocoder).notes is None
 
 
-def test_update_trip_geocoding_failure_leaves_stored_trip_unchanged(session, geocoder):
+@pytest.mark.parametrize("error", [PlaceNotFoundError("Atlantyda"), GeocodingUnavailableError("down")])
+def test_update_trip_geocoding_failure_saves_nothing(session, geocoder, error):
     trip = _create(session, geocoder)
-    with pytest.raises(PlaceNotFoundError):
-        svc.update_trip(session, trip.id, TripUpdate(name="New", origin="Atlantyda"), geocoder)
+    geocoder.error = error
+    with pytest.raises(type(error)):
+        svc.update_trip(session, trip.id, TripUpdate(name="New", origin="Tarnów"), geocoder)
 
+    session.expire_all()  # read back from the database, not the identity map
     stored = svc.get_trip(session, trip.id)
     assert (stored.name, stored.origin) == ("Work", "Kraków")
     assert _origin(stored) == KRAKOW

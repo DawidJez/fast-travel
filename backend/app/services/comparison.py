@@ -1,5 +1,6 @@
-"""Trip comparison: trip -> coordinates -> distance -> per-mode figures -> weather -> recommendation.
+"""Trip comparison: stored trip -> distance -> per-mode figures -> weather -> recommendation.
 
+Read-only: uses the coordinates saved with the trip and writes nothing to the database.
 Orchestration only; every number comes from the pure calculator/distance functions.
 """
 
@@ -20,45 +21,34 @@ from app.services.calculators import (
     travel_time_minutes,
 )
 from app.services.distance import haversine_km
-from app.services.geo import Coordinates, GeocodingError
+from app.services.geo import Coordinates
 from app.services.recommendation import recommend
 from app.services.weather import Weather, WeatherUnavailableError
 
 # Coordinates -> weather now; app.services.weather.current_weather in production, a fake in tests.
 WeatherProvider = Callable[[Coordinates], Weather]
 
-
-def ensure_coordinates(session: Session, trip, geocoder: trip_service.Geocoder) -> None:
-    """Geocode and save missing coordinates (e.g. trips stored before geocoding-on-save).
-
-    Raises GeocodingError and leaves the stored trip unchanged if geocoding fails.
-    """
-    if None not in (trip.origin_lat, trip.origin_lon, trip.destination_lat, trip.destination_lon):
-        return
-    try:
-        trip_service.fill_missing_coordinates(trip, geocoder)
-    except GeocodingError:
-        session.rollback()
-        raise
-    session.add(trip)
-    session.commit()
-    session.refresh(trip)
+# Modes whose figures are only a rough estimate, with the note shown in the API response.
+ESTIMATE_NOTES = {
+    Mode.PUBLIC_TRANSPORT: (
+        "Szacunek na podstawie średniej prędkości autobusu/tramwaju, "
+        "bez rozkładów jazdy i kolei (np. SKM)."
+    ),
+}
 
 
 def compare_trip(
     session: Session,
     trip_id: int,
-    geocoder: trip_service.Geocoder,
     weather_provider: WeatherProvider,
     now: datetime,
 ) -> TripComparisonRead:
-    """Full comparison for one trip.
+    """Full comparison for one trip (read-only).
 
-    Raises TripNotFoundError (missing trip) and GeocodingError (coordinates cannot be found).
-    A weather failure is not an error: weather is null and the recommendation ignores it.
+    Raises TripNotFoundError for a missing trip. A weather failure is not an error:
+    weather is null and the recommendation ignores it.
     """
     trip = trip_service.get_trip(session, trip_id)
-    ensure_coordinates(session, trip, geocoder)
 
     origin = Coordinates(lat=trip.origin_lat, lon=trip.origin_lon)
     destination = Coordinates(lat=trip.destination_lat, lon=trip.destination_lon)
@@ -83,6 +73,8 @@ def compare_trip(
                 time_minutes=round(result.time_minutes, 1),
                 cost_pln=round(result.cost_pln, 2),
                 co2_grams=round(result.co2_grams),
+                estimate=mode in ESTIMATE_NOTES,
+                note=ESTIMATE_NOTES.get(mode),
             )
         )
 

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from app import config
 from app.services.calculators import Mode  # pure module (imports only config): no import cycle
@@ -18,17 +18,14 @@ Notes = Annotated[str, StringConstraints(strip_whitespace=True, max_length=confi
 Latitude = Annotated[float, Field(ge=config.LATITUDE_MIN, le=config.LATITUDE_MAX, allow_inf_nan=False)]
 Longitude = Annotated[float, Field(ge=config.LONGITUDE_MIN, le=config.LONGITUDE_MAX, allow_inf_nan=False)]
 
-COORDINATE_PAIRS = (("origin_lat", "origin_lon"), ("destination_lat", "destination_lon"))
-
-
 class _TripOptionalFields(BaseModel):
-    """Fields that are optional both when creating and when editing a trip."""
+    """Fields that are optional both when creating and when editing a trip.
+
+    Coordinates are not accepted from the client: the server sets them by geocoding.
+    Unknown fields (including any *_lat / *_lon sent by a client) are ignored.
+    """
 
     notes: Notes | None = None
-    origin_lat: Latitude | None = None
-    origin_lon: Longitude | None = None
-    destination_lat: Latitude | None = None
-    destination_lon: Longitude | None = None
 
     @field_validator("notes")
     @classmethod
@@ -36,17 +33,9 @@ class _TripOptionalFields(BaseModel):
         """Store whitespace-only notes as no notes."""
         return value or None
 
-    @model_validator(mode="after")
-    def coordinates_come_in_pairs(self):
-        """lat and lon of one place are either both set or both empty."""
-        for lat, lon in COORDINATE_PAIRS:
-            if (getattr(self, lat) is None) != (getattr(self, lon) is None):
-                raise ValueError(f"{lat} and {lon} must be given together")
-        return self
-
 
 class TripCreate(_TripOptionalFields):
-    """Body of POST /api/trips."""
+    """Body of POST /api/trips. Origin and destination are geocoded by the server."""
 
     name: Name
     origin: Place
@@ -54,7 +43,8 @@ class TripCreate(_TripOptionalFields):
 
 
 class TripUpdate(_TripOptionalFields):
-    """Body of PUT /api/trips/{id}: partial — only fields that are sent are changed."""
+    """Body of PUT /api/trips/{id}: partial — only fields that are sent are changed.
+    A changed origin / destination is geocoded again by the server."""
 
     name: Name | None = None
     origin: Place | None = None
@@ -68,14 +58,6 @@ class TripUpdate(_TripOptionalFields):
             raise ValueError("field cannot be null; omit it to keep the current value")
         return value
 
-    @model_validator(mode="after")
-    def coordinate_pairs_sent_together(self):
-        """A partial update must not change only one half of a lat/lon pair."""
-        for lat, lon in COORDINATE_PAIRS:
-            if (lat in self.model_fields_set) != (lon in self.model_fields_set):
-                raise ValueError(f"{lat} and {lon} must be sent together")
-        return self
-
 
 class TripRead(BaseModel):
     """Trip as returned by the API."""
@@ -87,10 +69,10 @@ class TripRead(BaseModel):
     origin: str
     destination: str
     notes: str | None
-    origin_lat: float | None
-    origin_lon: float | None
-    destination_lat: float | None
-    destination_lon: float | None
+    origin_lat: float
+    origin_lon: float
+    destination_lat: float
+    destination_lon: float
     created_at: datetime
 
     @field_validator("created_at")
@@ -111,6 +93,8 @@ class ModeComparisonRead(BaseModel):
     time_minutes: float = Field(description="Door-to-door estimate, 1 decimal")
     cost_pln: float = Field(description="2 decimals")
     co2_grams: int = Field(description="Direct CO2e per traveller, whole grams")
+    estimate: bool = Field(description="True when the figures are a rough estimate (public transport)")
+    note: str | None = Field(description="Explanation of the estimate; null for other modes")
 
 
 class WeatherRead(BaseModel):

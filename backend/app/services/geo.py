@@ -60,7 +60,13 @@ def geocode(place: str, client: httpx.Client | None = None) -> Coordinates:
         with httpx.Client() as own_client:
             return geocode(name, own_client)
 
-    params = {"name": name, "count": 1, "language": config.GEOCODING_LANGUAGE, "format": "json"}
+    params = {
+        "name": name,
+        "count": 1,
+        "language": config.GEOCODING_LANGUAGE,
+        "countryCode": config.GEOCODING_COUNTRY_CODE,
+        "format": "json",
+    }
     try:
         response = client.get(config.GEOCODING_URL, params=params, timeout=config.GEOCODING_TIMEOUT_SECONDS)
         response.raise_for_status()

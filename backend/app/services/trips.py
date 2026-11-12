@@ -1,9 +1,15 @@
 """Trip CRUD logic. Routers call these functions and contain no logic of their own."""
 
+from collections.abc import Callable
+
 from sqlmodel import Session, col, select
 
 from app.models import Trip
 from app.schemas import TripCreate, TripUpdate
+from app.services.geo import Coordinates, GeocodingError
+
+# Place name -> coordinates; app.services.geo.geocode in production, a fake in tests.
+Geocoder = Callable[[str], Coordinates]
 
 # Which coordinate fields belong to which place name.
 PLACE_COORDINATES = {
@@ -20,9 +26,26 @@ class TripNotFoundError(Exception):
         super().__init__(f"Trip {trip_id} not found")
 
 
-def create_trip(session: Session, data: TripCreate) -> Trip:
-    """Save a new trip and return it with id and created_at filled in."""
+def fill_missing_coordinates(trip: Trip, geocoder: Geocoder) -> None:
+    """Geocode every place of `trip` that has no coordinates yet (in place).
+
+    Raises GeocodingError (place not found / service unavailable); the trip may be
+    partially filled then, so callers must not commit it.
+    """
+    for place, (lat, lon) in PLACE_COORDINATES.items():
+        if getattr(trip, lat) is None:
+            point = geocoder(getattr(trip, place))
+            setattr(trip, lat, point.lat)
+            setattr(trip, lon, point.lon)
+
+
+def create_trip(session: Session, data: TripCreate, geocoder: Geocoder) -> Trip:
+    """Save a new trip; places sent without coordinates are geocoded first.
+
+    Raises GeocodingError and saves nothing if a place cannot be geocoded.
+    """
     trip = Trip(**data.model_dump())
+    fill_missing_coordinates(trip, geocoder)
     session.add(trip)
     session.commit()
     session.refresh(trip)
@@ -43,11 +66,13 @@ def get_trip(session: Session, trip_id: int) -> Trip:
     return trip
 
 
-def update_trip(session: Session, trip_id: int, data: TripUpdate) -> Trip:
+def update_trip(session: Session, trip_id: int, data: TripUpdate, geocoder: Geocoder) -> Trip:
     """Apply only the fields that were sent; raise TripNotFoundError if missing.
 
     If a place name changes and no new coordinates for it are sent, its old
-    coordinates are cleared so they never point at the previous place.
+    coordinates are dropped and the new name is geocoded, so they never point at
+    the previous place. Raises GeocodingError and leaves the stored trip unchanged
+    if geocoding fails.
     """
     trip = get_trip(session, trip_id)
     changes = data.model_dump(exclude_unset=True)
@@ -56,6 +81,11 @@ def update_trip(session: Session, trip_id: int, data: TripUpdate) -> Trip:
         if renamed and lat not in changes:
             changes[lat] = changes[lon] = None
     trip.sqlmodel_update(changes)
+    try:
+        fill_missing_coordinates(trip, geocoder)
+    except GeocodingError:
+        session.rollback()  # discard the in-memory edits; the stored row is untouched
+        raise
     session.add(trip)
     session.commit()
     session.refresh(trip)

@@ -1,5 +1,7 @@
 import pytest
 
+from app.services.geo import GeocodingUnavailableError
+
 VALID = {"name": "Work", "origin": "Kraków", "destination": "Wieliczka"}
 
 
@@ -16,8 +18,30 @@ def test_create_returns_201_and_trip(client):
     assert body["id"] > 0
     assert body["name"] == "Work"
     assert body["origin_lat"] == 50.06
-    assert body["destination_lat"] is None
+    assert (body["destination_lat"], body["destination_lon"]) == (49.9874, 20.0647)  # geocoded
     assert body["created_at"].endswith(("Z", "+00:00"))
+
+
+def test_create_geocodes_places_without_coordinates(client, geocoder):
+    body = _post(client).json()
+    assert (body["origin_lat"], body["origin_lon"]) == (50.0614, 19.9366)
+    assert (body["destination_lat"], body["destination_lon"]) == (49.9874, 20.0647)
+    assert geocoder.calls == ["Kraków", "Wieliczka"]
+
+
+def test_create_unknown_place_returns_422_and_saves_nothing(client):
+    response = _post(client, destination="Atlantyda")
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Place not found: 'Atlantyda'"}
+    assert client.get("/api/trips").json() == []
+
+
+def test_create_geocoding_unavailable_returns_503_and_saves_nothing(client, geocoder):
+    geocoder.error = GeocodingUnavailableError("Geocoding service did not answer within 5 s")
+    response = _post(client)
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Geocoding service did not answer within 5 s"}
+    assert client.get("/api/trips").json() == []
 
 
 @pytest.mark.parametrize(
@@ -119,15 +143,31 @@ def test_update_full_coordinate_pair(client):
     assert response.status_code == 200
     body = response.json()
     assert (body["destination_lat"], body["destination_lon"]) == (49.98, 20.06)
-    assert body["origin_lat"] is None
+    assert (body["origin_lat"], body["origin_lon"]) == (50.0614, 19.9366)
 
 
-def test_update_renamed_place_clears_its_stale_coordinates(client):
+def test_update_renamed_place_replaces_its_stale_coordinates(client):
     trip_id = _post(client, origin_lat=50.06, origin_lon=19.94, destination_lat=49.98, destination_lon=20.06).json()["id"]
     body = client.put(f"/api/trips/{trip_id}", json={"origin": "Tarnów"}).json()
     assert body["origin"] == "Tarnów"
-    assert body["origin_lat"] is None and body["origin_lon"] is None
+    assert (body["origin_lat"], body["origin_lon"]) == (50.0121, 20.9858)
     assert (body["destination_lat"], body["destination_lon"]) == (49.98, 20.06)
+
+
+def test_update_unknown_place_returns_422_and_keeps_trip(client):
+    trip_id = _post(client).json()["id"]
+    response = client.put(f"/api/trips/{trip_id}", json={"origin": "Atlantyda"})
+    assert response.status_code == 422
+    assert client.get(f"/api/trips/{trip_id}").json()["origin"] == "Kraków"
+
+
+def test_update_geocoding_unavailable_returns_503_and_keeps_trip(client, geocoder):
+    trip_id = _post(client).json()["id"]
+    geocoder.error = GeocodingUnavailableError("down")
+    response = client.put(f"/api/trips/{trip_id}", json={"origin": "Tarnów"})
+    assert response.status_code == 503
+    geocoder.error = None
+    assert client.get(f"/api/trips/{trip_id}").json()["origin"] == "Kraków"
 
 
 def test_update_invalid_input_on_missing_trip_returns_422(client):
@@ -165,3 +205,12 @@ def test_out_of_range_id_returns_422_not_500(client, method, bad_id):
 def test_max_sqlite_id_is_accepted_and_returns_404(client, method):
     response = getattr(client, method)(f"/api/trips/{2**63 - 1}")
     assert response.status_code == 404
+
+
+# --- geocoder dependency ---
+
+def test_get_geocoder_returns_real_open_meteo_geocoder():
+    from app.api.trips import get_geocoder
+    from app.services import geo
+
+    assert get_geocoder() is geo.geocode

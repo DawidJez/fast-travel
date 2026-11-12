@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import SQLModel
 
 from app import config, main
+from app.services.geo import GeocodingUnavailableError, PlaceNotFoundError
 from app.services.trips import TripNotFoundError
 
 FRONTEND_ORIGIN = config.DEFAULT_CORS_ORIGINS[0]
@@ -107,3 +108,17 @@ def test_cors_rejects_unknown_origin():
 
     simple = client.get("/api/health", headers={"Origin": "http://evil.example"})
     assert "access-control-allow-origin" not in simple.headers
+
+
+# --- geocoding error handlers ---
+
+def test_place_not_found_handler_returns_422():
+    response = asyncio.run(main.place_not_found_handler(None, PlaceNotFoundError("Atlantyda")))
+    assert response.status_code == 422
+    assert json.loads(response.body) == {"detail": "Place not found: 'Atlantyda'"}
+
+
+def test_geocoding_unavailable_handler_returns_503():
+    response = asyncio.run(main.geocoding_unavailable_handler(None, GeocodingUnavailableError("down")))
+    assert response.status_code == 503
+    assert json.loads(response.body) == {"detail": "down"}

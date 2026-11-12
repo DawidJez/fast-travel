@@ -15,6 +15,7 @@ from app import config
 from app import models  # noqa: F401  (registers tables before create_db_and_tables)
 from app.api import trips as trips_api
 from app.db import create_db_and_tables
+from app.services.geo import GeocodingUnavailableError, PlaceNotFoundError
 from app.services.trips import TripNotFoundError
 
 
@@ -40,6 +41,18 @@ app.add_middleware(
 async def trip_not_found_handler(request: Request, exc: TripNotFoundError) -> JSONResponse:
     """Map a missing trip from the service layer to HTTP 404."""
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(exc)})
+
+
+@app.exception_handler(PlaceNotFoundError)
+async def place_not_found_handler(request: Request, exc: PlaceNotFoundError) -> JSONResponse:
+    """A place name that geocoding cannot find is invalid input -> 422."""
+    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": str(exc)})
+
+
+@app.exception_handler(GeocodingUnavailableError)
+async def geocoding_unavailable_handler(request: Request, exc: GeocodingUnavailableError) -> JSONResponse:
+    """The external geocoding service failed; the client may retry later -> 503."""
+    return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"detail": str(exc)})
 
 
 def json_safe(value: Any) -> Any:

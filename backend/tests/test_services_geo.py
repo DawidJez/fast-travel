@@ -53,7 +53,21 @@ def test_geocode_sends_expected_request():
     (request,) = seen
     assert request.method == "GET"
     assert str(request.url).startswith(config.GEOCODING_URL)
-    assert dict(request.url.params) == {"name": "Kraków", "count": "1", "language": "pl", "format": "json"}
+    assert dict(request.url.params) == {
+        "name": "Kraków", "count": "1", "language": "pl", "countryCode": "PL", "format": "json",
+    }
+
+
+def test_geocode_restricts_search_to_configured_country(monkeypatch):
+    seen = []
+
+    def handler(request):
+        seen.append(request.url.params["countryCode"])
+        return httpx.Response(200, json=KRAKOW)
+
+    monkeypatch.setattr(config, "GEOCODING_COUNTRY_CODE", "DE")
+    geo.geocode("Berlin", _client(handler))
+    assert seen == ["DE"]
 
 
 def test_geocode_applies_timeout():

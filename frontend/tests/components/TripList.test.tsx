@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import TripList from './TripList'
-import { makeTrip } from './test/fixtures'
+import TripList from '../../src/components/TripList'
+import { makeTrip } from '../fixtures'
 
 function renderList(props: Partial<Parameters<typeof TripList>[0]> = {}) {
   const handlers = { onRetry: vi.fn(), onSelect: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() }

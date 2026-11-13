@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError } from './api'
-import TripForm from './TripForm'
-import { makeTrip } from './test/fixtures'
+import { api, ApiError } from '../../src/api/client'
+import TripForm from '../../src/components/TripForm'
+import { makeTrip } from '../fixtures'
 
-vi.mock('./api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./api')>()
+vi.mock('../../src/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/api/client')>()
   return { ...actual, api: { ...actual.api, createTrip: vi.fn(), updateTrip: vi.fn() } }
 })
 

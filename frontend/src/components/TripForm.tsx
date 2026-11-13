@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { api, errorText, type Trip, type TripCreate } from './api'
+import { api, errorText, type Trip, type TripCreate } from '../api/client'
 import Spinner from './Spinner'
-import { alert, button, card } from './ui'
+import { alert, button, card } from '../ui'
 
 // Same limits as backend/app/config.py (TRIP_*_MAX_LENGTH); the backend still validates.
 const MAX_NAME = 100

@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError } from './api'
-import App from './App'
-import { makeComparison, makeTrip } from './test/fixtures'
+import { api, ApiError } from '../src/api/client'
+import App from '../src/App'
+import { makeComparison, makeTrip } from './fixtures'
 
-vi.mock('./api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./api')>()
+vi.mock('../src/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/api/client')>()
   return {
     ...actual,
     api: { listTrips: vi.fn(), createTrip: vi.fn(), updateTrip: vi.fn(), deleteTrip: vi.fn(), getComparison: vi.fn() },

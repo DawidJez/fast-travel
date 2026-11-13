@@ -1,4 +1,4 @@
-import type { Comparison, Trip } from '../api'
+import type { Comparison, Trip } from '../src/api/client'
 
 export function makeTrip(overrides: Partial<Trip> = {}): Trip {
   return {

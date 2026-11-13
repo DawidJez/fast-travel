@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError } from './api'
-import ComparisonView from './ComparisonView'
-import { makeComparison } from './test/fixtures'
+import { api, ApiError } from '../../src/api/client'
+import ComparisonView from '../../src/components/ComparisonView'
+import { makeComparison } from '../fixtures'
 
-vi.mock('./api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./api')>()
+vi.mock('../../src/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/api/client')>()
   return { ...actual, api: { getComparison: vi.fn() } }
 })
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MODE_ICONS, MODE_LABELS, formatClock, formatGrams, formatKm, formatMinutes, formatPln, formatWeather } from './format'
+import { MODE_ICONS, MODE_LABELS, formatClock, formatGrams, formatKm, formatMinutes, formatPln, formatWeather } from '../src/format'
 
 // toLocaleString('pl-PL') may use a (narrow) no-break space as thousands separator.
 const normalize = (text: string) => text.replace(/[  ]/g, ' ')

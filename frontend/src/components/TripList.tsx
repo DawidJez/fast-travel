@@ -1,6 +1,6 @@
-import type { Trip } from './api'
+import type { Trip } from '../api/client'
 import { Loading } from './Spinner'
-import { alert, button } from './ui'
+import { alert, button } from '../ui'
 
 interface Props {
   trips: Trip[]

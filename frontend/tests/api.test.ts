@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { API_URL, ApiError, api, errorMessage, errorText, request } from './api'
+import { API_URL, ApiError, api, errorMessage, errorText, request } from '../src/api/client'
 
 function mockFetch(response: Response | Error) {
   const fn = vi.fn(async () => {

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { api, errorText, type Comparison, type ModeComparison } from './api'
+import { api, errorText, type Comparison, type ModeComparison } from '../api/client'
 import {
   MODE_ICONS, MODE_LABELS, formatClock, formatGrams, formatKm, formatMinutes, formatPln, formatWeather,
-} from './format'
+} from '../format'
 import Spinner, { Loading } from './Spinner'
-import { alert, button } from './ui'
+import { alert, button } from '../ui'
 
 interface Props {
   tripId: number

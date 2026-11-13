@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, errorText, type Trip } from './api'
-import ComparisonView from './ComparisonView'
-import TripForm from './TripForm'
-import TripList from './TripList'
+import { api, errorText, type Trip } from './api/client'
+import ComparisonView from './components/ComparisonView'
+import TripForm from './components/TripForm'
+import TripList from './components/TripList'
 import { card } from './ui'
 
 /** On narrow screens (one column) bring a section into view; on wide screens everything is visible. */

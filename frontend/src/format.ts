@@ -1,6 +1,6 @@
 /** Display helpers (Polish number format) for comparison figures. */
 
-import type { Mode, Weather } from './api'
+import type { Mode, Weather } from './api/client'
 
 export const MODE_LABELS: Record<Mode, string> = {
   walk: 'Pieszo',

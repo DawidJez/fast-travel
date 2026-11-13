@@ -132,6 +132,23 @@ def test_current_weather_unexpected_shape_raises_unavailable(body):
         weather.current_weather(GDANSK, _client(_json(body)))
 
 
+@pytest.mark.parametrize(
+    "field", ["temperature_2m", "precipitation", "wind_speed_10m"],
+)
+@pytest.mark.parametrize("bad", ["NaN", "Infinity", "-Infinity"])
+def test_current_weather_non_finite_values_raise_unavailable(field, bad):
+    values = {"temperature_2m": "3.8", "precipitation": "0.0", "wind_speed_10m": "10.0", field: bad}
+    raw = '{"current": {%s}}' % ", ".join(f'"{k}": {v}' for k, v in values.items())
+    handler = lambda request: httpx.Response(200, content=raw.encode())  # noqa: E731
+    with pytest.raises(weather.WeatherUnavailableError, match="unexpected response"):
+        weather.current_weather(GDANSK, _client(handler))
+
+
+def test_weather_model_rejects_nan():
+    with pytest.raises(ValidationError):
+        weather.Weather(temperature_c=float("nan"), precipitation_mm=0, wind_speed_kmh=0)
+
+
 # --- model ---
 
 def test_weather_is_frozen_and_validated():

@@ -16,17 +16,17 @@ class Weather(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    temperature_c: float
-    precipitation_mm: float = Field(ge=0)
-    wind_speed_kmh: float = Field(ge=0)
+    temperature_c: float = Field(allow_inf_nan=False)
+    precipitation_mm: float = Field(ge=0, allow_inf_nan=False)
+    wind_speed_kmh: float = Field(ge=0, allow_inf_nan=False)
 
 
 class _Current(BaseModel):
-    """The API's "current" object (only the fields we use)."""
+    """The API's "current" object (only the fields we use). NaN/Infinity -> invalid response."""
 
-    temperature_2m: float
-    precipitation: float = Field(ge=0)
-    wind_speed_10m: float = Field(ge=0)
+    temperature_2m: float = Field(allow_inf_nan=False)
+    precipitation: float = Field(ge=0, allow_inf_nan=False)
+    wind_speed_10m: float = Field(ge=0, allow_inf_nan=False)
 
 
 class _ForecastResponse(BaseModel):

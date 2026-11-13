@@ -127,34 +127,6 @@ def test_negative_distance_raises(func, mode):
         func(mode, -1)
 
 
-# --- route distance per mode ---
-
-@pytest.mark.parametrize(
-    ("mode", "factor_name"),
-    [
-        (Mode.WALK, "WALK_DETOUR_FACTOR"),
-        (Mode.BIKE, "BIKE_DETOUR_FACTOR"),
-        (Mode.CAR, "DETOUR_FACTOR"),
-        (Mode.PUBLIC_TRANSPORT, "DETOUR_FACTOR"),
-    ],
-)
-def test_route_distance_uses_mode_detour_factor(monkeypatch, mode, factor_name):
-    monkeypatch.setattr(config, factor_name, 2.0)
-    assert calc.route_distance_km(mode, 10) == pytest.approx(20)
-
-
-def test_route_distance_real_factors():
-    assert calc.route_distance_km(Mode.WALK, 10) == pytest.approx(12)
-    assert calc.route_distance_km(Mode.BIKE, 10) == pytest.approx(12)
-    assert calc.route_distance_km(Mode.CAR, 10) == pytest.approx(13)
-    assert calc.route_distance_km(Mode.PUBLIC_TRANSPORT, 10) == pytest.approx(13)
-
-
-def test_route_distance_negative_raises():
-    with pytest.raises(ValueError):
-        calc.route_distance_km(Mode.CAR, -1)
-
-
 # --- car rush hour ---
 
 @pytest.mark.parametrize(

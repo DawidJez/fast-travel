@@ -72,15 +72,16 @@ def format_pln(value: float) -> str:
 
 def zero_emission_alternative(fastest: ModeResult, candidates: list[ModeResult]) -> ModeResult | None:
     """The faster remaining walk/bike option if it is less than ZERO_EMISSION_MAX_EXTRA_TIME_RATIO
-    slower than `fastest` (exact times); None if `fastest` is already zero-emission or none qualifies."""
+    slower than `fastest` (in whole minutes); None if `fastest` is already zero-emission or none qualifies."""
     if fastest.mode in ZERO_EMISSION_MODES:
         return None
     green = [r for r in candidates if r.mode in ZERO_EMISSION_MODES]
     if not green:
         return None
     best_green = min(green, key=_rank_key)
-    limit = fastest.time_minutes * (1 + config.ZERO_EMISSION_MAX_EXTRA_TIME_RATIO)
-    return best_green if best_green.time_minutes < limit else None
+    # Compare whole minutes, the same numbers the reason text shows.
+    limit = round(fastest.time_minutes) * (1 + config.ZERO_EMISSION_MAX_EXTRA_TIME_RATIO)
+    return best_green if round(best_green.time_minutes) < limit else None
 
 
 def _zero_emission_reason(chosen: ModeResult, fastest: ModeResult) -> str:
@@ -131,7 +132,7 @@ def recommend(weather: Weather | None, results: list[ModeResult]) -> Recommendat
             f"Najszybciej: {MODE_LABELS_PL[best.mode]} "
             f"(ok. {round(best.time_minutes)} min, {round(best.co2_grams)} g CO₂)"
         )
-        if len(same_time) > 1:
+        if any(r.co2_grams > best.co2_grams for r in same_time):
             reason += ", przy równym czasie wybrano niższą emisję CO₂"
         reason += "."
     if notes:

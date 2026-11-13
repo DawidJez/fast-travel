@@ -1,8 +1,9 @@
-"""Distance between two points: great-circle (haversine) and estimated road distance."""
+"""Distance: great-circle (haversine) between two points and estimated route length per mode."""
 
 import math
 
 from app import config
+from app.services.calculators import Mode
 from app.services.geo import Coordinates
 
 
@@ -14,6 +15,18 @@ def haversine_km(a: Coordinates, b: Coordinates) -> float:
     return 2 * config.EARTH_RADIUS_KM * math.asin(math.sqrt(min(1.0, h)))
 
 
-def road_distance_km(a: Coordinates, b: Coordinates) -> float:
-    """Estimated road distance: haversine x detour factor (roads are not straight lines)."""
-    return haversine_km(a, b) * config.DETOUR_FACTOR
+def _detour_factor(mode: Mode) -> float:
+    return {
+        Mode.WALK: config.WALK_DETOUR_FACTOR,
+        Mode.BIKE: config.BIKE_DETOUR_FACTOR,
+        Mode.CAR: config.DETOUR_FACTOR,
+        Mode.PUBLIC_TRANSPORT: config.DETOUR_FACTOR,
+    }[mode]
+
+
+def route_distance_km(mode: Mode, straight_line_km: float) -> float:
+    """Estimated route length for `mode`: straight-line distance x the mode's detour factor
+    (roads for car / public transport, more direct paths for walking and cycling)."""
+    if straight_line_km < 0:
+        raise ValueError(f"straight_line_km must be >= 0, got {straight_line_km}")
+    return straight_line_km * _detour_factor(mode)

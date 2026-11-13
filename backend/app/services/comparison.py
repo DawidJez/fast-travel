@@ -17,10 +17,9 @@ from app.services.calculators import (
     co2_grams,
     cost_pln,
     is_car_peak,
-    route_distance_km,
     travel_time_minutes,
 )
-from app.services.distance import haversine_km
+from app.services.distance import haversine_km, route_distance_km
 from app.services.geo import Coordinates
 from app.services.recommendation import recommend
 from app.services.weather import Weather, WeatherUnavailableError

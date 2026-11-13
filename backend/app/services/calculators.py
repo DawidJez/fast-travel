@@ -56,25 +56,9 @@ def _co2_g_per_km(mode: Mode) -> float:
     }[mode]
 
 
-def _detour_factor(mode: Mode) -> float:
-    return {
-        Mode.WALK: config.WALK_DETOUR_FACTOR,
-        Mode.BIKE: config.BIKE_DETOUR_FACTOR,
-        Mode.CAR: config.DETOUR_FACTOR,
-        Mode.PUBLIC_TRANSPORT: config.DETOUR_FACTOR,
-    }[mode]
-
-
 def _check_distance(distance_km: float) -> None:
     if distance_km < 0:
         raise ValueError(f"distance_km must be >= 0, got {distance_km}")
-
-
-def route_distance_km(mode: Mode, straight_line_km: float) -> float:
-    """Estimated route length for `mode`: straight-line distance x the mode's detour factor
-    (roads for car / public transport, more direct paths for walking and cycling)."""
-    _check_distance(straight_line_km)
-    return straight_line_km * _detour_factor(mode)
 
 
 def is_car_peak(now: datetime) -> bool:

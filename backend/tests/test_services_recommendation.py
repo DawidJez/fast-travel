@@ -189,6 +189,17 @@ def test_equal_time_and_co2_goes_to_lower_cost():
     assert recommend(GOOD, results).mode is Mode.PUBLIC_TRANSPORT
 
 
+def test_no_tie_note_when_tied_modes_have_equal_co2():
+    zero = [R(m, 0) for m in Mode]  # zero-distance trip: everything 0 min, 0 g
+    rec = recommend(GOOD, zero)
+    assert rec.reason == "Najszybciej: pieszo (ok. 0 min, 0 g CO₂)."
+
+
+def test_tie_note_only_when_a_tied_mode_emits_more():
+    results = [R(Mode.WALK, 10), R(Mode.BIKE, 10), R(Mode.CAR, 10, co2=300)]
+    assert "przy równym czasie wybrano niższą emisję CO₂" in recommend(GOOD, results).reason
+
+
 def test_no_tie_note_with_clear_winner():
     assert "równym czasie" not in recommend(GOOD, SHORT_TRIP).reason
 
@@ -213,8 +224,23 @@ def test_zero_emission_within_threshold_wins_with_cost_of_time_and_savings():
 
 
 def test_zero_emission_just_below_threshold_wins():
-    results = [R(Mode.BIKE, 14.99), R(Mode.CAR, 10, co2=500, cost=4)]
+    results = [R(Mode.BIKE, 14.4), R(Mode.CAR, 10, co2=500, cost=4)]  # shown 14 min < 15
     assert recommend(GOOD, results).mode is Mode.BIKE
+
+
+def test_threshold_uses_whole_minutes_shown_in_text():
+    # exact: 30.5 < 20.4 x 1.5 = 30.6, but the user sees 30 vs 20 = exactly +50% -> loses
+    results = [R(Mode.BIKE, 30.5), R(Mode.CAR, 20.4, co2=900, cost=5)]
+    rec = recommend(GOOD, results)
+    assert rec.mode is Mode.CAR
+    assert rec.reason == "Najszybciej: samochód (ok. 20 min, 900 g CO₂)."
+
+
+def test_threshold_rounding_can_also_let_zero_emission_win():
+    # exact: 29.6 >= 19.6 x 1.5 = 29.4, but shown 30 vs 20 -> still exactly +50% -> loses;
+    # 29.4 vs 19.6 -> shown 29 vs 20 -> wins
+    assert recommend(GOOD, [R(Mode.BIKE, 29.6), R(Mode.CAR, 19.6, co2=900)]).mode is Mode.CAR
+    assert recommend(GOOD, [R(Mode.BIKE, 29.4), R(Mode.CAR, 19.6, co2=900)]).mode is Mode.BIKE
 
 
 def test_zero_emission_exactly_at_threshold_loses():

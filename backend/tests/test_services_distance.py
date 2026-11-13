@@ -3,7 +3,8 @@ import math
 import pytest
 
 from app import config
-from app.services.distance import haversine_km, road_distance_km
+from app.services.calculators import Mode
+from app.services.distance import haversine_km, route_distance_km
 from app.services.geo import Coordinates
 
 R = config.EARTH_RADIUS_KM
@@ -55,18 +56,31 @@ def test_distance_is_symmetric():
     assert haversine_km(a, b) == haversine_km(b, a)
 
 
-# Road distance.
+# --- route distance per mode ---
 
-def test_road_distance_is_haversine_times_detour_factor():
-    a, b = P(0, 0), P(0, 1)
-    assert road_distance_km(a, b) == pytest.approx(haversine_km(a, b) * config.DETOUR_FACTOR)
-    assert road_distance_km(a, b) == pytest.approx(111.195 * 1.3, rel=1e-4)
+@pytest.mark.parametrize(
+    ("mode", "factor_name"),
+    [
+        (Mode.WALK, "WALK_DETOUR_FACTOR"),
+        (Mode.BIKE, "BIKE_DETOUR_FACTOR"),
+        (Mode.CAR, "DETOUR_FACTOR"),
+        (Mode.PUBLIC_TRANSPORT, "DETOUR_FACTOR"),
+    ],
+)
+def test_route_distance_uses_mode_detour_factor(monkeypatch, mode, factor_name):
+    monkeypatch.setattr(config, factor_name, 2.0)
+    assert route_distance_km(mode, 10) == pytest.approx(20)
 
 
-def test_road_distance_uses_config_value(monkeypatch):
-    monkeypatch.setattr(config, "DETOUR_FACTOR", 2.0)
-    assert road_distance_km(P(0, 0), P(0, 1)) == pytest.approx(2 * haversine_km(P(0, 0), P(0, 1)))
+def test_route_distance_real_factors():
+    assert route_distance_km(Mode.WALK, 10) == pytest.approx(12)
+    assert route_distance_km(Mode.BIKE, 10) == pytest.approx(12)
+    assert route_distance_km(Mode.CAR, 10) == pytest.approx(13)
+    assert route_distance_km(Mode.PUBLIC_TRANSPORT, 10) == pytest.approx(13)
 
 
-def test_road_distance_same_point_is_zero():
-    assert road_distance_km(P(1, 1), P(1, 1)) == 0.0
+def test_route_distance_negative_raises():
+    with pytest.raises(ValueError):
+        route_distance_km(Mode.CAR, -1)
+
+

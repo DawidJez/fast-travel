@@ -9,6 +9,7 @@ from app.schemas import TripComparisonRead
 from app.services import calculators as calc
 from app.services.calculators import Mode
 from app.services.comparison import ESTIMATE_NOTES, compare_trip
+from app.services import distance
 from app.services.distance import haversine_km
 from app.services.geo import Coordinates
 from app.services.trips import TripNotFoundError
@@ -55,7 +56,7 @@ def test_compare_trip_builds_full_comparison(session, weather_provider):
     assert result.weather.model_dump() == {"temperature_c": 12.0, "precipitation_mm": 0.0, "wind_speed_kmh": 10.0}
 
     for row in result.modes:
-        km = calc.route_distance_km(row.mode, straight)
+        km = distance.route_distance_km(row.mode, straight)
         assert row.distance_km == round(km, 1)
         assert row.time_minutes == round(calc.travel_time_minutes(row.mode, km), 1)
         assert row.cost_pln == round(calc.cost_pln(row.mode, km), 2)
@@ -178,3 +179,9 @@ def test_public_transport_note_text():
             "bez rozkładów jazdy i kolei (np. SKM)."
         )
     }
+
+
+def test_compare_trip_zero_distance_reason_has_no_misleading_tie_note(session, weather_provider):
+    trip = _trip(session, destination="Kraków", destination_lat=KRAKOW.lat, destination_lon=KRAKOW.lon)
+    reason = compare_trip(session, trip.id, weather_provider, NOON).recommendation.reason
+    assert "równym czasie" not in reason

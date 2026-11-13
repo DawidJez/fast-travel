@@ -2,13 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError } from './api'
 import App from './App'
-import { makeTrip } from './test/fixtures'
+import { makeComparison, makeTrip } from './test/fixtures'
 
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return {
     ...actual,
-    api: { listTrips: vi.fn(), createTrip: vi.fn(), updateTrip: vi.fn(), deleteTrip: vi.fn() },
+    api: { listTrips: vi.fn(), createTrip: vi.fn(), updateTrip: vi.fn(), deleteTrip: vi.fn(), getComparison: vi.fn() },
   }
 })
 
@@ -18,10 +18,12 @@ const SCHOOL = makeTrip({ id: 2, name: 'Szkoła' })
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(api.listTrips).mockResolvedValue([WORK, SCHOOL])
+  vi.mocked(api.getComparison).mockResolvedValue(makeComparison())
 })
 afterEach(() => vi.restoreAllMocks())
 
 const item = (name: string) => screen.getByText(name).closest('li') as HTMLElement
+const select = (name: string) => fireEvent.click(within(item(name)).getByRole('button', { name: new RegExp(name) }))
 
 describe('App', () => {
   it('loads and shows the trips', async () => {
@@ -120,5 +122,52 @@ describe('App', () => {
     fireEvent.click(within(item('Praca')).getByRole('button', { name: 'Usuń' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Błąd serwera (HTTP 500).')
     expect(screen.getByText('Praca')).toBeInTheDocument()
+  })
+
+  it('shows a hint until a trip is selected, then its comparison', async () => {
+    render(<App />)
+    await screen.findByText('Praca')
+    expect(screen.getByText('Wybierz trasę z listy, aby zobaczyć porównanie.')).toBeInTheDocument()
+
+    select('Praca')
+
+    expect(await screen.findByText('Polecamy: Rower')).toBeInTheDocument()
+    expect(api.getComparison).toHaveBeenCalledWith(1)
+  })
+
+  it('reloads the comparison when another trip is selected', async () => {
+    render(<App />)
+    await screen.findByText('Praca')
+    select('Praca')
+    await screen.findByText('Polecamy: Rower')
+    select('Szkoła')
+    await waitFor(() => expect(api.getComparison).toHaveBeenLastCalledWith(2))
+  })
+
+  it('reloads the comparison after the selected trip places are edited', async () => {
+    vi.mocked(api.updateTrip).mockResolvedValue({ ...WORK, destination: 'Sopot' })
+    render(<App />)
+    await screen.findByText('Praca')
+    select('Praca')
+    await screen.findByText('Polecamy: Rower')
+
+    fireEvent.click(within(item('Praca')).getByRole('button', { name: 'Edytuj' }))
+    fireEvent.change(screen.getByLabelText('Dokąd'), { target: { value: 'Sopot' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz zmiany' }))
+
+    await waitFor(() => expect(api.getComparison).toHaveBeenCalledTimes(2))
+  })
+
+  it('deleting the selected trip hides its comparison', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(api.deleteTrip).mockResolvedValue(undefined)
+    render(<App />)
+    await screen.findByText('Praca')
+    select('Praca')
+    await screen.findByText('Polecamy: Rower')
+
+    fireEvent.click(within(item('Praca')).getByRole('button', { name: 'Usuń' }))
+
+    expect(await screen.findByText('Wybierz trasę z listy, aby zobaczyć porównanie.')).toBeInTheDocument()
   })
 })

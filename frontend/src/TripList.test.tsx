@@ -4,8 +4,8 @@ import TripList from './TripList'
 import { makeTrip } from './test/fixtures'
 
 function renderList(props: Partial<Parameters<typeof TripList>[0]> = {}) {
-  const handlers = { onRetry: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() }
-  render(<TripList trips={[]} loading={false} error={null} actionError={null} {...handlers} {...props} />)
+  const handlers = { onRetry: vi.fn(), onSelect: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() }
+  render(<TripList trips={[]} loading={false} error={null} actionError={null} selectedId={null} {...handlers} {...props} />)
   return handlers
 }
 
@@ -43,5 +43,15 @@ describe('TripList', () => {
     renderList({ trips: [makeTrip()], actionError: 'Nie znaleziono podróży' })
     expect(screen.getByRole('alert')).toHaveTextContent('Nie znaleziono podróży')
     expect(screen.getByRole('listitem')).toBeInTheDocument()
+  })
+
+  it('selects a trip and marks the selected one', () => {
+    const trip = makeTrip({ id: 2, name: 'Szkoła' })
+    const { onSelect } = renderList({ trips: [makeTrip(), trip], selectedId: 2 })
+    const select = screen.getByRole('button', { name: /Szkoła/ })
+    expect(select).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /Praca/ })).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(select)
+    expect(onSelect).toHaveBeenCalledWith(trip)
   })
 })

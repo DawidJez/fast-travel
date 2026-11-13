@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, errorText, type Trip } from './api'
+import ComparisonView from './ComparisonView'
 import TripForm from './TripForm'
 import TripList from './TripList'
 
@@ -9,6 +10,8 @@ export default function App() {
   const [listError, setListError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Trip | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const selected = trips.find((t) => t.id === selectedId) ?? null
 
   // `loading` starts as true; the retry button sets it again before calling this.
   // State is set only in the promise callbacks, never synchronously.
@@ -48,6 +51,7 @@ export default function App() {
       await api.deleteTrip(trip.id)
       setTrips((current) => current.filter((t) => t.id !== trip.id))
       if (editing?.id === trip.id) setEditing(null)
+      if (selectedId === trip.id) setSelectedId(null)
     } catch (caught) {
       setActionError(errorText(caught))
     }
@@ -71,12 +75,22 @@ export default function App() {
               loading={loading}
               error={listError}
               actionError={actionError}
+              selectedId={selectedId}
               onRetry={retry}
+              onSelect={(trip) => setSelectedId(trip.id)}
               onEdit={setEditing}
               onDelete={(trip) => void handleDelete(trip)}
             />
           </section>
         </div>
+        <section className="rounded border border-slate-200 bg-white p-4">
+          {selected ? (
+            // A new key reloads the comparison when another trip is chosen or its places are edited.
+            <ComparisonView key={`${selected.id}|${selected.origin}|${selected.destination}`} tripId={selected.id} />
+          ) : (
+            <p className="text-slate-500">Wybierz trasę z listy, aby zobaczyć porównanie.</p>
+          )}
+        </section>
       </main>
       <footer className="mx-auto max-w-5xl p-4 text-xs text-slate-500">
         Geokodowanie: © OpenStreetMap contributors

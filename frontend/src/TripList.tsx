@@ -7,12 +7,17 @@ interface Props {
   error: string | null
   /** Error of the last action on the list (e.g. delete); shown above the list. */
   actionError: string | null
+  /** Trip whose comparison is shown; highlighted in the list. */
+  selectedId: number | null
   onRetry: () => void
+  onSelect: (trip: Trip) => void
   onEdit: (trip: Trip) => void
   onDelete: (trip: Trip) => void
 }
 
-export default function TripList({ trips, loading, error, actionError, onRetry, onEdit, onDelete }: Props) {
+export default function TripList({
+  trips, loading, error, actionError, selectedId, onRetry, onSelect, onEdit, onDelete,
+}: Props) {
   if (loading) return <p className="text-slate-500">Ładowanie tras…</p>
 
   if (error) {
@@ -38,15 +43,24 @@ export default function TripList({ trips, loading, error, actionError, onRetry, 
       ) : (
         <ul className="space-y-2">
           {trips.map((trip) => (
-            <li key={trip.id} className="rounded border border-slate-200 bg-white p-3">
+            <li
+              key={trip.id}
+              className={`rounded border bg-white p-3 ${trip.id === selectedId ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-200'}`}
+            >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium">{trip.name}</p>
-                  <p className="text-sm text-slate-600">
+                <button
+                  type="button"
+                  onClick={() => onSelect(trip)}
+                  aria-pressed={trip.id === selectedId}
+                  title="Pokaż porównanie"
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <span className="block font-medium">{trip.name}</span>
+                  <span className="block text-sm text-slate-600">
                     {trip.origin} → {trip.destination}
-                  </p>
-                  {trip.notes && <p className="mt-1 text-sm whitespace-pre-line text-slate-500">{trip.notes}</p>}
-                </div>
+                  </span>
+                  {trip.notes && <span className="mt-1 block text-sm whitespace-pre-line text-slate-500">{trip.notes}</span>}
+                </button>
                 <div className="flex shrink-0 gap-2 text-sm">
                   <button type="button" onClick={() => onEdit(trip)} className="text-blue-700 hover:underline">
                     Edytuj

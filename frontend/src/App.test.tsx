@@ -31,7 +31,10 @@ describe('App', () => {
     expect(screen.getByText('Ładowanie tras…')).toBeInTheDocument()
     expect(await screen.findByText('Praca')).toBeInTheDocument()
     expect(screen.getByText('Szkoła')).toBeInTheDocument()
-    expect(screen.getByText(/© OpenStreetMap contributors/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'OpenStreetMap contributors' })).toHaveAttribute(
+      'href', 'https://www.openstreetmap.org/copyright',
+    )
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('Geokodowanie: © OpenStreetMap contributors')
   })
 
   it('shows a load error and retries', async () => {
@@ -169,5 +172,38 @@ describe('App', () => {
     fireEvent.click(within(item('Praca')).getByRole('button', { name: 'Usuń' }))
 
     expect(await screen.findByText('Wybierz trasę z listy, aby zobaczyć porównanie.')).toBeInTheDocument()
+  })
+
+  it('on a narrow screen scrolls to the comparison and to the form', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 1023px)' }))
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    try {
+      render(<App />)
+      await screen.findByText('Praca')
+      select('Praca')
+      expect(scroll).toHaveBeenCalledTimes(1)
+      expect(scroll.mock.contexts[0]).toBe(screen.getByRole('region', { name: 'Porównanie' }))
+      fireEvent.click(within(item('Praca')).getByRole('button', { name: 'Edytuj' }))
+      expect(scroll).toHaveBeenCalledTimes(2)
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('does not scroll on a wide screen', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    try {
+      render(<App />)
+      await screen.findByText('Praca')
+      select('Praca')
+      expect(scroll).not.toHaveBeenCalled()
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+      vi.unstubAllGlobals()
+    }
   })
 })

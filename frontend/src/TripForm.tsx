@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { api, errorText, type Trip, type TripCreate } from './api'
+import Spinner from './Spinner'
+import { alert, button, card } from './ui'
 
 // Same limits as backend/app/config.py (TRIP_*_MAX_LENGTH); the backend still validates.
 const MAX_NAME = 100
@@ -38,7 +40,21 @@ function toPayload(values: Values): TripCreate {
   }
 }
 
-const inputClass = 'mt-1 w-full rounded border border-slate-300 px-2 py-1 disabled:bg-slate-100'
+const inputClass =
+  'mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-xs placeholder:text-slate-400 ' +
+  'focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500'
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div>
+      <label className="block">
+        <span className="text-sm font-medium text-slate-700">{label}</span>
+        {children}
+      </label>
+      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+    </div>
+  )
+}
 
 /** Add / edit form. Remount it (key) when switching trips so it starts from that trip's values. */
 export default function TripForm({ trip, onSaved, onCancel }: Props) {
@@ -66,38 +82,45 @@ export default function TripForm({ trip, onSaved, onCancel }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded border border-slate-200 bg-white p-4">
-      <h2 className="text-lg font-semibold">{trip ? 'Edytuj trasę' : 'Nowa trasa'}</h2>
+    <form onSubmit={handleSubmit} className={`${card} space-y-4 p-5`}>
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">{trip ? 'Edytuj trasę' : 'Nowa trasa'}</h2>
+        {trip && <p className="text-sm text-slate-500">Zmieniasz „{trip.name}”.</p>}
+      </div>
 
-      <label className="block">
-        <span className="text-sm font-medium">Nazwa</span>
-        <input className={inputClass} value={values.name} onChange={set('name')} required maxLength={MAX_NAME} disabled={saving} />
-      </label>
-      <label className="block">
-        <span className="text-sm font-medium">Skąd</span>
-        <input className={inputClass} value={values.origin} onChange={set('origin')} required maxLength={MAX_PLACE} disabled={saving} />
-      </label>
-      <label className="block">
-        <span className="text-sm font-medium">Dokąd</span>
-        <input className={inputClass} value={values.destination} onChange={set('destination')} required maxLength={MAX_PLACE} disabled={saving} />
-      </label>
-      <label className="block">
-        <span className="text-sm font-medium">Notatka</span>
-        <textarea className={inputClass} value={values.notes} onChange={set('notes')} maxLength={MAX_NOTES} rows={2} disabled={saving} />
-      </label>
+      <Field label="Nazwa">
+        <input className={inputClass} value={values.name} onChange={set('name')} required maxLength={MAX_NAME}
+          disabled={saving} placeholder="np. Do pracy" />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+        <Field label="Skąd">
+          <input className={inputClass} value={values.origin} onChange={set('origin')} required maxLength={MAX_PLACE}
+            disabled={saving} placeholder="np. Gdańsk Wrzeszcz" />
+        </Field>
+        <Field label="Dokąd">
+          <input className={inputClass} value={values.destination} onChange={set('destination')} required
+            maxLength={MAX_PLACE} disabled={saving} placeholder="np. Politechnika Gdańska" />
+        </Field>
+      </div>
+      <p className="-mt-2 text-xs text-slate-500">Miejscowość, dzielnica, adres lub nazwa miejsca.</p>
+      <Field label="Notatka" hint="Opcjonalnie.">
+        <textarea className={inputClass} value={values.notes} onChange={set('notes')} maxLength={MAX_NOTES} rows={2}
+          disabled={saving} />
+      </Field>
 
       {error && (
-        <p role="alert" className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-800">
+        <p role="alert" className={alert}>
           {error}
         </p>
       )}
 
-      <div className="flex gap-2">
-        <button type="submit" disabled={saving} className="rounded bg-blue-700 px-3 py-1 text-white disabled:opacity-60">
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" disabled={saving} className={button.primary}>
+          {saving && <Spinner />}
           {saving ? 'Zapisywanie…' : trip ? 'Zapisz zmiany' : 'Dodaj trasę'}
         </button>
         {trip && (
-          <button type="button" onClick={onCancel} disabled={saving} className="rounded border border-slate-300 px-3 py-1">
+          <button type="button" onClick={onCancel} disabled={saving} className={button.secondary}>
             Anuluj
           </button>
         )}

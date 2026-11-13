@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError } from './api'
 import ComparisonView from './ComparisonView'
@@ -20,7 +20,7 @@ describe('ComparisonView', () => {
     expect(screen.getByText('Liczenie porównania…')).toBeInTheDocument()
     expect(await screen.findByText('Gdańsk Wrzeszcz → Gdańsk Oliwa')).toBeInTheDocument()
     expect(api.getComparison).toHaveBeenCalledWith(7)
-    expect(screen.getByText('W linii prostej: 4,2 km')).toBeInTheDocument()
+    expect(screen.getByText(/^W linii prostej: 4,2 km · stan na \d{2}:\d{2}$/)).toBeInTheDocument()
   })
 
   it('shows four mode cards with time, cost, CO2 and distance', async () => {
@@ -95,5 +95,44 @@ describe('ComparisonView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Spróbuj ponownie' }))
     expect(await screen.findByText('Polecamy: Rower')).toBeInTheDocument()
     expect(api.getComparison).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows a spinner while loading', () => {
+    vi.mocked(api.getComparison).mockReturnValue(new Promise(() => {}))
+    render(<ComparisonView tripId={1} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Liczenie porównania…')
+    expect(screen.queryByRole('button', { name: /Odśwież/ })).not.toBeInTheDocument()
+  })
+
+  it('refresh fetches again and keeps the old figures meanwhile', async () => {
+    let resolve!: (c: ReturnType<typeof makeComparison>) => void
+    vi.mocked(api.getComparison)
+      .mockResolvedValueOnce(makeComparison())
+      .mockReturnValueOnce(new Promise((r) => (resolve = r)))
+    render(<ComparisonView tripId={1} />)
+    await screen.findByText('Polecamy: Rower')
+
+    fireEvent.click(screen.getByRole('button', { name: /Odśwież/ }))
+
+    expect(screen.getByRole('button', { name: /Przeliczanie…/ })).toBeDisabled()
+    expect(screen.getByText('Polecamy: Rower')).toBeInTheDocument()
+    resolve(makeComparison({ recommendation: { mode: 'car', reason: 'Pada.' } }))
+    expect(await screen.findByText('Polecamy: Samochód')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Odśwież/ })).toBeEnabled()
+    expect(api.getComparison).toHaveBeenCalledTimes(2)
+  })
+
+  it('a failed refresh shows the error but keeps the last figures', async () => {
+    vi.mocked(api.getComparison)
+      .mockResolvedValueOnce(makeComparison())
+      .mockRejectedValueOnce(new ApiError(0, 'Brak połączenia z serwerem'))
+    render(<ComparisonView tripId={1} />)
+    await screen.findByText('Polecamy: Rower')
+
+    fireEvent.click(screen.getByRole('button', { name: /Odśwież/ }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Brak połączenia z serwerem')
+    expect(screen.getByText('Polecamy: Rower')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: /Odśwież/ })).toBeEnabled())
   })
 })

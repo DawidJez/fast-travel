@@ -9,6 +9,14 @@ export const MODE_LABELS: Record<Mode, string> = {
   public_transport: 'Komunikacja miejska',
 }
 
+/** Decorative icons next to the labels (hidden from screen readers). */
+export const MODE_ICONS: Record<Mode, string> = {
+  walk: '🚶',
+  bike: '🚲',
+  car: '🚗',
+  public_transport: '🚋',
+}
+
 const number = (value: number, decimals: number) =>
   value.toLocaleString('pl-PL', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 
@@ -33,3 +41,6 @@ export function formatWeather(weather: Weather): string {
     `wiatr ${number(weather.wind_speed_kmh, 0)} km/h`,
   ].join(', ')
 }
+
+/** Local clock time "HH:MM", e.g. when a comparison was calculated. */
+export const formatClock = (date: Date) => date.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })

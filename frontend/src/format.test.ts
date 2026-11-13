@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MODE_LABELS, formatGrams, formatKm, formatMinutes, formatPln, formatWeather } from './format'
+import { MODE_ICONS, MODE_LABELS, formatClock, formatGrams, formatKm, formatMinutes, formatPln, formatWeather } from './format'
 
 // toLocaleString('pl-PL') may use a (narrow) no-break space as thousands separator.
 const normalize = (text: string) => text.replace(/[  ]/g, ' ')
@@ -33,5 +33,13 @@ describe('format', () => {
 
   it('has a label for every mode', () => {
     expect(Object.keys(MODE_LABELS).sort()).toEqual(['bike', 'car', 'public_transport', 'walk'])
+  })
+
+  it('has an icon for every mode', () => {
+    expect(Object.keys(MODE_ICONS).sort()).toEqual(Object.keys(MODE_LABELS).sort())
+  })
+
+  it('formats the clock as HH:MM', () => {
+    expect(formatClock(new Date(2026, 10, 13, 8, 5))).toBe('08:05')
   })
 })

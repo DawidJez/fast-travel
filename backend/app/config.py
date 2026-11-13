@@ -82,6 +82,8 @@ FROST_THRESHOLD_C = 0.0
 MAX_WALK_MINUTES = 30.0
 MAX_BIKE_MINUTES = 40.0
 
+ZERO_EMISSION_MAX_EXTRA_TIME_RATIO = 0.5
+
 # --- Distance ---------------------------------------------------------------
 
 # Source: IUGG mean Earth radius R1 = 6371.0088 km (Moritz, "Geodetic Reference System 1980",

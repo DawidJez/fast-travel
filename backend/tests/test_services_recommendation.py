@@ -4,10 +4,14 @@ from app import config
 from app.services.calculators import Mode, ModeResult
 from app.services.recommendation import (
     MODE_LABELS_PL,
+    MODE_LABELS_PL_GENITIVE,
+    ZERO_EMISSION_MODES,
     Recommendation,
+    format_pln,
     recommend,
     too_long,
     weather_exclusions,
+    zero_emission_alternative,
 )
 from app.services.weather import Weather
 
@@ -187,6 +191,131 @@ def test_equal_time_and_co2_goes_to_lower_cost():
 
 def test_no_tie_note_with_clear_winner():
     assert "równym czasie" not in recommend(GOOD, SHORT_TRIP).reason
+
+
+# --- zero-emission preference (+50% time rule) ---
+
+# Car 20 min; bike 24 min (+20%) -> bike wins. Walk 29 min also within limits.
+GREEN_TRIP = [
+    R(Mode.WALK, 29),
+    R(Mode.BIKE, 24.4),
+    R(Mode.CAR, 19.5, co2=1104, cost=7.59),
+    R(Mode.PUBLIC_TRANSPORT, 37, co2=690, cost=6.0),
+]
+
+
+def test_zero_emission_within_threshold_wins_with_cost_of_time_and_savings():
+    rec = recommend(GOOD, GREEN_TRIP)
+    assert rec == Recommendation(
+        mode=Mode.BIKE,
+        reason="Rower (ok. 24 min) zamiast samochodu (ok. 20 min): o 4 min dłużej, ale oszczędzasz 7,59 zł i 1104 g CO₂.",
+    )
+
+
+def test_zero_emission_just_below_threshold_wins():
+    results = [R(Mode.BIKE, 14.99), R(Mode.CAR, 10, co2=500, cost=4)]
+    assert recommend(GOOD, results).mode is Mode.BIKE
+
+
+def test_zero_emission_exactly_at_threshold_loses():
+    results = [R(Mode.BIKE, 15), R(Mode.CAR, 10, co2=500, cost=4)]  # 15 = 10 x 1.5, needs to be less
+    rec = recommend(GOOD, results)
+    assert rec.mode is Mode.CAR
+    assert rec.reason == "Najszybciej: samochód (ok. 10 min, 500 g CO₂)."
+
+
+def test_zero_emission_above_threshold_loses():
+    results = [R(Mode.BIKE, 20), R(Mode.CAR, 10, co2=500, cost=4)]
+    assert recommend(GOOD, results).mode is Mode.CAR
+
+
+def test_faster_of_walk_and_bike_is_compared():
+    results = [R(Mode.WALK, 14), R(Mode.BIKE, 12), R(Mode.CAR, 10, co2=500, cost=4)]
+    assert recommend(GOOD, results).mode is Mode.BIKE
+
+
+def test_walk_considered_when_bike_is_too_slow_vs_threshold_but_walk_is_not():
+    results = [R(Mode.WALK, 13), R(Mode.BIKE, 13.5), R(Mode.CAR, 10, co2=500, cost=4)]
+    assert recommend(GOOD, results).mode is Mode.WALK
+
+
+def test_rain_no_zero_emission_option_fastest_wins():
+    rec = recommend(RAIN, GREEN_TRIP)
+    assert rec.mode is Mode.CAR
+    assert "zamiast" not in rec.reason
+
+
+def test_frost_only_walking_is_compared():
+    rec = recommend(COLD, GREEN_TRIP)  # bike dropped; walk 29 min < 19.5 x 1.5 = 29.25
+    assert rec.mode is Mode.WALK
+    assert rec.reason == (
+        "Rower odpada (mróz -3 °C). "
+        "Pieszo (ok. 29 min) zamiast samochodu (ok. 20 min): o 9 min dłużej, ale oszczędzasz 7,59 zł i 1104 g CO₂."
+    )
+
+
+def test_time_limit_still_applies_before_threshold():
+    # bike 58 min < car 40 x 1.5 = 60, but over MAX_BIKE_MINUTES (40) -> dropped
+    results = [R(Mode.BIKE, 58), R(Mode.CAR, 40, co2=2000, cost=12)]
+    rec = recommend(GOOD, results)
+    assert rec.mode is Mode.CAR
+    assert rec.reason.startswith("Rower odpada (ok. 58 min, za długo).")
+
+
+def test_compared_against_public_transport_when_it_is_fastest():
+    results = [R(Mode.BIKE, 30), R(Mode.CAR, 28, co2=1500, cost=10), R(Mode.PUBLIC_TRANSPORT, 25, co2=700, cost=6)]
+    rec = recommend(GOOD, results)
+    assert rec.mode is Mode.BIKE
+    assert rec.reason == (
+        "Rower (ok. 30 min) zamiast komunikacji miejskiej (ok. 25 min): "
+        "o 5 min dłużej, ale oszczędzasz 6,00 zł i 700 g CO₂."
+    )
+
+
+def test_threshold_comes_from_config(monkeypatch):
+    results = [R(Mode.BIKE, 18), R(Mode.CAR, 10, co2=500, cost=4)]
+    assert recommend(GOOD, results).mode is Mode.CAR
+    monkeypatch.setattr(config, "ZERO_EMISSION_MAX_EXTRA_TIME_RATIO", 1.0)  # +100%
+    assert recommend(GOOD, results).mode is Mode.BIKE
+
+
+def test_no_weather_still_prefers_zero_emission():
+    rec = recommend(None, GREEN_TRIP)
+    assert rec.mode is Mode.BIKE
+    assert rec.reason.startswith("Brak danych pogodowych, pogoda nie została uwzględniona. Rower (ok. 24 min) zamiast")
+
+
+# --- zero_emission_alternative ---
+
+def test_zero_emission_alternative_none_when_fastest_is_green():
+    fastest = R(Mode.BIKE, 9)
+    assert zero_emission_alternative(fastest, [fastest, R(Mode.CAR, 10, co2=1)]) is None
+
+
+def test_zero_emission_alternative_none_without_green_candidates():
+    fastest = R(Mode.CAR, 10, co2=500)
+    assert zero_emission_alternative(fastest, [fastest, R(Mode.PUBLIC_TRANSPORT, 12, co2=300)]) is None
+
+
+def test_zero_emission_alternative_returns_faster_green():
+    fastest = R(Mode.CAR, 10, co2=500)
+    walk, bike = R(Mode.WALK, 14), R(Mode.BIKE, 11)
+    assert zero_emission_alternative(fastest, [walk, bike, fastest]) is bike
+
+
+# --- helpers ---
+
+@pytest.mark.parametrize(("value", "text"), [(7.59, "7,59"), (6, "6,00"), (0.005, "0,01"), (12.3, "12,30")])
+def test_format_pln(value, text):
+    assert format_pln(value) == text
+
+
+def test_zero_emission_modes():
+    assert ZERO_EMISSION_MODES == {Mode.WALK, Mode.BIKE}
+
+
+def test_every_non_zero_emission_mode_has_genitive_label():
+    assert set(MODE_LABELS_PL_GENITIVE) == set(Mode) - ZERO_EMISSION_MODES
 
 
 # --- errors ---

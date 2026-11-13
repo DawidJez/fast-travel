@@ -93,3 +93,7 @@ def test_nominatim_user_agent_is_not_a_library_default():
 
 def test_nominatim_interval_respects_policy_maximum():
     assert config.NOMINATIM_MIN_INTERVAL_SECONDS >= 1.0  # "absolute maximum of 1 request per second"
+
+
+def test_zero_emission_threshold_is_plus_50_percent():
+    assert config.ZERO_EMISSION_MAX_EXTRA_TIME_RATIO == 0.5

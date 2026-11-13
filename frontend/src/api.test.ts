@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { API_URL, ApiError, api, errorMessage, request } from './api'
+import { API_URL, ApiError, api, errorMessage, errorText, request } from './api'
 
 function mockFetch(response: Response | Error) {
   const fn = vi.fn(async () => {
@@ -139,5 +139,15 @@ describe('api endpoints', () => {
     await expect(api.deleteTrip(3)).resolves.toBeUndefined()
     const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit]
     expect([url, init.method]).toEqual([`${API_URL}/trips/3`, 'DELETE'])
+  })
+})
+
+describe('errorText', () => {
+  it('uses the ApiError message', () => {
+    expect(errorText(new ApiError(503, 'niedostępne'))).toBe('niedostępne')
+  })
+
+  it('hides details of unexpected errors', () => {
+    expect(errorText(new TypeError('x is undefined'))).toBe('Wystąpił nieoczekiwany błąd.')
   })
 })

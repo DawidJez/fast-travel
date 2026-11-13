@@ -140,6 +140,11 @@ export function errorMessage(status: number, body: unknown): string {
   return `Błąd serwera (HTTP ${status}).`
 }
 
+/** Message to show for anything caught around an API call. */
+export function errorText(error: unknown): string {
+  return error instanceof ApiError ? error.message : 'Wystąpił nieoczekiwany błąd.'
+}
+
 // --- Fetch wrapper ---
 
 export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api').replace(/\/+$/, '')

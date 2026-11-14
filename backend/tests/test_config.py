@@ -97,3 +97,52 @@ def test_nominatim_interval_respects_policy_maximum():
 
 def test_zero_emission_threshold_is_plus_50_percent():
     assert config.ZERO_EMISSION_MAX_EXTRA_TIME_RATIO == 0.5
+
+
+# --- AI parsing / .env ---
+
+@pytest.mark.parametrize("env", [{}, {config.GEMINI_API_KEY_ENV: ""}, {config.GEMINI_API_KEY_ENV: "   "}])
+def test_load_gemini_api_key_missing_means_demo_mode(env):
+    assert config.load_gemini_api_key(env) is None
+
+
+def test_load_gemini_api_key_strips():
+    assert config.load_gemini_api_key({config.GEMINI_API_KEY_ENV: " abc123 \n"}) == "abc123"
+
+
+def test_load_gemini_model_default_and_override():
+    assert config.load_gemini_model({}) == config.DEFAULT_GEMINI_MODEL == "gemini-3.1-flash-lite"
+    assert config.load_gemini_model({config.GEMINI_MODEL_ENV: " gemini-3-flash-preview "}) == "gemini-3-flash-preview"
+
+
+def test_env_file_is_backend_dotenv():
+    assert config.ENV_FILE == config.BACKEND_DIR / ".env"
+
+
+def test_load_env_file_sets_missing_variables_but_never_overrides(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("FT_TEST_NEW=from-file\nFT_TEST_SET=from-file\n# comment\n")
+    monkeypatch.delenv("FT_TEST_NEW", raising=False)
+    monkeypatch.setenv("FT_TEST_SET", "from-env")
+
+    config.load_env_file(env_file)
+
+    import os
+    assert os.environ["FT_TEST_NEW"] == "from-file"
+    assert os.environ["FT_TEST_SET"] == "from-env"
+    monkeypatch.delenv("FT_TEST_NEW")
+
+
+def test_load_env_file_missing_file_is_fine(tmp_path):
+    config.load_env_file(tmp_path / "nope.env")
+
+
+def test_env_example_documents_the_gemini_variables():
+    example = (config.BACKEND_DIR / ".env.example").read_text()
+    assert f"{config.GEMINI_API_KEY_ENV}=\n" in example  # shipped empty: demo mode by default
+    assert config.GEMINI_MODEL_ENV in example
+
+
+def test_parse_text_limit_and_llm_timeout_are_sane():
+    assert 100 <= config.PARSE_TEXT_MAX_LENGTH <= 2000
+    assert 0 < config.LLM_TIMEOUT_SECONDS <= 30

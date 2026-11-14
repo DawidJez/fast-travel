@@ -8,8 +8,22 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # Source: project layout — backend/ is the parent of this app/ package.
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+# Source: project decision — local secrets (Gemini key) live in backend/.env (gitignored, see
+# backend/.env.example). Real environment variables take precedence over the file.
+ENV_FILE = BACKEND_DIR / ".env"
+
+
+def load_env_file(path: Path) -> None:
+    """Load KEY=VALUE lines from `path` into os.environ without overriding existing variables."""
+    load_dotenv(path, override=False)
+
+
+load_env_file(ENV_FILE)
 
 # Source: project decision — SQLite file next to the backend (*.db is gitignored).
 DEFAULT_DB_PATH = BACKEND_DIR / "fast_travel.db"
@@ -204,9 +218,23 @@ WALK_CO2_G_PER_KM = 0.0
 # larger ids cannot exist and would crash the driver, so the API rejects them up front.
 SQLITE_MAX_INTEGER = 2**63 - 1
 
+# --- AI trip parsing (POST /api/parse) ---
+
+# Source: Gemini API generateContent endpoint (https://ai.google.dev/gemini-api/docs/structured-output).
+GEMINI_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+# Source: project decision (owner) — Gemini 3.1 Flash-Lite: cheap, fast, has a free tier
+# (https://ai.google.dev/gemini-api/docs/gemini-3). Override with FAST_TRAVEL_GEMINI_MODEL.
+DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
+# Source: project decision — extraction is a short answer; after this the rule-based parser is used.
+LLM_TIMEOUT_SECONDS = 10.0
+# Source: project decision — a trip description is one or two sentences; caps what is sent to the LLM.
+PARSE_TEXT_MAX_LENGTH = 500
+
 # Source: project decision — env var names, prefixed with the app name to avoid clashes.
 DB_PATH_ENV = "FAST_TRAVEL_DB_PATH"
 CORS_ORIGINS_ENV = "FAST_TRAVEL_CORS_ORIGINS"  # comma-separated list
+GEMINI_API_KEY_ENV = "FAST_TRAVEL_GEMINI_API_KEY"  # empty or missing -> demo mode (rule-based parser)
+GEMINI_MODEL_ENV = "FAST_TRAVEL_GEMINI_MODEL"
 
 
 def load_db_path(environ: Mapping[str, str]) -> Path:
@@ -222,7 +250,19 @@ def load_cors_origins(environ: Mapping[str, str]) -> list[str]:
     return origins or list(DEFAULT_CORS_ORIGINS)
 
 
+def load_gemini_api_key(environ: Mapping[str, str]) -> str | None:
+    """Return the Gemini API key, or None (demo mode) when it is missing or blank."""
+    return environ.get(GEMINI_API_KEY_ENV, "").strip() or None
+
+
+def load_gemini_model(environ: Mapping[str, str]) -> str:
+    """Return the Gemini model name from the environment, or the default."""
+    return environ.get(GEMINI_MODEL_ENV, "").strip() or DEFAULT_GEMINI_MODEL
+
+
 DB_PATH = load_db_path(os.environ)
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 CORS_ORIGINS = load_cors_origins(os.environ)
 NOMINATIM_ENABLED = load_nominatim_enabled(os.environ)
+GEMINI_API_KEY = load_gemini_api_key(os.environ)
+GEMINI_MODEL = load_gemini_model(os.environ)

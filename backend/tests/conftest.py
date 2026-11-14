@@ -7,6 +7,7 @@ from sqlmodel import Session, create_engine
 from sqlmodel.pool import StaticPool
 
 from app import db
+from app.api import parse as parse_api
 from app.api import trips as trips_api
 from app.main import app
 from app.services.geo import Coordinates, PlaceNotFoundError
@@ -69,6 +70,32 @@ def weather_provider():
     return FakeWeather()
 
 
+class FakeLLM:
+    """Stands in for an LLMClient: returns a fixed raw answer (or raises), records every call."""
+
+    def __init__(self, answer: str = "{}", error: Exception | None = None):
+        self.answer = answer
+        self.error = error
+        self.calls: list[str] = []
+
+    def extract_trip(self, text: str) -> str:
+        self.calls.append(text)
+        if self.error is not None:
+            raise self.error
+        return self.answer
+
+
+@pytest.fixture
+def llm():
+    """Holder for the LLM the API sees: `llm.client = FakeLLM(...)`; None (demo mode) by default,
+    so tests never call the real Gemini API even when backend/.env has a key."""
+
+    class Holder:
+        client: FakeLLM | None = None
+
+    return Holder()
+
+
 @pytest.fixture
 def clock():
     """Mutable holder for the time the API sees: set clock.now = ... in a test."""
@@ -105,7 +132,7 @@ def session(engine):
 
 
 @pytest.fixture
-def client(engine, geocoder, weather_provider, clock):
+def client(engine, geocoder, weather_provider, clock, llm):
     """API client on the per-test in-memory DB, fake geocoder, fake weather and a fixed clock
     (no real DB file, no network, deterministic time)."""
 
@@ -118,6 +145,7 @@ def client(engine, geocoder, weather_provider, clock):
         trips_api.get_geocoder: lambda: geocoder,
         trips_api.get_weather_provider: lambda: weather_provider,
         trips_api.get_now: lambda: clock.now,
+        parse_api.get_llm_client: lambda: llm.client,
     }
     app.dependency_overrides.update(overrides)
     yield TestClient(app)

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_vali
 
 from app import config
 from app.services.calculators import Mode  # pure module (imports only config): no import cycle
+from app.services.parsing import Source
 
 Name = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=config.TRIP_NAME_MAX_LENGTH)
@@ -121,3 +122,23 @@ class TripComparisonRead(BaseModel):
     weather: WeatherRead | None = Field(description="null when the weather service is unavailable")
     modes: list[ModeComparisonRead]
     recommendation: RecommendationRead
+
+
+# --- AI parsing (POST /api/parse) ---
+
+
+class ParseRequest(BaseModel):
+    """Body of POST /api/parse: a free-text trip description."""
+
+    text: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=config.PARSE_TEXT_MAX_LENGTH)
+    ]
+
+
+class ParseResponse(BaseModel):
+    """Fields to prefill the trip form; null when the text does not say. Only text, never numbers."""
+
+    name: str | None
+    origin: str | None
+    destination: str | None
+    source: Source = Field(description='"llm" = Gemini, "demo" = rule-based parser (no API key or LLM failure)')

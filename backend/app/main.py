@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app import config
 from app import models  # noqa: F401  (registers tables before create_db_and_tables)
+from app.api import parse as parse_api
 from app.api import trips as trips_api
 from app.db import create_db_and_tables
 from app.services.geo import GeocodingUnavailableError, PlaceNotFoundError
@@ -76,6 +77,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 
 app.include_router(trips_api.router)
+app.include_router(parse_api.router)
 
 
 @app.get("/api/health", tags=["health"])

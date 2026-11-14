@@ -1,24 +1,22 @@
-import json
-
 import pytest
 
 from app import config
 from app.api import parse as parse_api
-from app.services.parsing import GeminiClient, LLMError
+from app.services.parsing import DemoClient, GeminiClient, LLMError, ParsedTrip
 from tests.conftest import FakeLLM
 
 
-def test_parse_demo_mode_without_llm(client):
+def test_parse_demo_mode(client):
     response = client.post("/api/parse", json={"text": "Do pracy: z Oliwa do Wrzeszcz"})
     assert response.status_code == 200
     assert response.json() == {"name": "Do pracy", "origin": "Oliwa", "destination": "Wrzeszcz", "source": "demo"}
 
 
-def test_parse_uses_llm_answer(client, llm):
-    llm.client = FakeLLM(json.dumps({"name": None, "origin": "Oliwa", "destination": "Politechnika Gdańska"}))
+def test_parse_ai_answer(client, llm):
+    llm.client = FakeLLM(ParsedTrip(origin="Oliwa", destination="Politechnika Gdańska"))
     response = client.post("/api/parse", json={"text": "  z Oliwy na Polibudę  "})
     assert response.status_code == 200
-    assert response.json() == {"name": None, "origin": "Oliwa", "destination": "Politechnika Gdańska", "source": "llm"}
+    assert response.json() == {"name": None, "origin": "Oliwa", "destination": "Politechnika Gdańska", "source": "ai"}
     assert llm.client.calls == ["z Oliwy na Polibudę"]  # stripped before it reaches the LLM
 
 
@@ -26,14 +24,18 @@ def test_parse_llm_failure_falls_back_to_demo(client, llm):
     llm.client = FakeLLM(error=LLMError("Gemini returned HTTP 503"))
     response = client.post("/api/parse", json={"text": "z Oliwa do Wrzeszcz"})
     assert response.status_code == 200
-    assert response.json()["source"] == "demo"
-    assert response.json()["origin"] == "Oliwa"
+    assert (response.json()["source"], response.json()["origin"]) == ("demo", "Oliwa")
 
 
-def test_parse_nothing_recognised_returns_nulls(client):
+def test_parse_no_route_is_422(client):
     response = client.post("/api/parse", json={"text": "jutro rano"})
-    assert response.status_code == 200
-    assert response.json() == {"name": None, "origin": None, "destination": None, "source": "demo"}
+    assert response.status_code == 422
+    assert response.json() == {"detail": "No route found in the text"}
+
+
+def test_parse_writes_nothing_to_the_database(client):
+    client.post("/api/parse", json={"text": "z Oliwa do Wrzeszcz"})
+    assert client.get("/api/trips").json() == []
 
 
 @pytest.mark.parametrize(
@@ -46,9 +48,17 @@ def test_parse_rejects_invalid_input(client, llm, body):
     assert llm.client.calls == []
 
 
-def test_get_llm_client_demo_mode_without_key(monkeypatch):
+def test_parse_accepts_text_at_the_length_limit(client):
+    text = "z Oliwa do Wrzeszcz " + "x" * (config.PARSE_TEXT_MAX_LENGTH - 20)
+    assert len(text) == config.PARSE_TEXT_MAX_LENGTH
+    response = client.post("/api/parse", json={"text": text})
+    assert response.status_code == 200
+    assert (response.json()["origin"], response.json()["destination"]) == ("Oliwa", None)  # no 500 on a long fragment
+
+
+def test_get_llm_client_demo_without_key(monkeypatch):
     monkeypatch.setattr(config, "GEMINI_API_KEY", None)
-    assert parse_api.get_llm_client() is None
+    assert isinstance(parse_api.get_llm_client(), DemoClient)
 
 
 def test_get_llm_client_gemini_with_key(monkeypatch):

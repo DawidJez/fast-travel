@@ -141,4 +141,4 @@ class ParseResponse(BaseModel):
     name: str | None
     origin: str | None
     destination: str | None
-    source: Source = Field(description='"llm" = Gemini, "demo" = rule-based parser (no API key or LLM failure)')
+    source: Source = Field(description='"ai" = Gemini, "demo" = rule-based parser (no API key or LLM failure)')

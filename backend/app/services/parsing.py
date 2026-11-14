@@ -2,8 +2,9 @@
 
 The LLM only extracts text fields that a Trip has; it never produces numbers (time, cost and CO2
 are computed elsewhere by deterministic code). Its output is untrusted and always validated with
-Pydantic. Without an API key, or when the LLM fails or answers with garbage, a simple rule-based
-parser is used instead (demo mode), so the endpoint never crashes and works offline.
+Pydantic. Two LLMClient implementations: GeminiClient (API key configured) and DemoClient (no key:
+a simple rule-based parser, works offline). When Gemini fails or answers with garbage, DemoClient is
+used instead, so the endpoint never crashes. Text without a recognisable route -> NoRouteFoundError.
 """
 
 import json
@@ -20,13 +21,14 @@ logger = logging.getLogger(__name__)
 
 
 class LLMError(Exception):
-    """The LLM could not be reached or did not return a usable answer."""
+    """The LLM could not be reached or did not return a usable (valid) answer."""
 
 
-class LLMClient(Protocol):
-    """Anything that turns a trip description into a JSON object string (the raw, unvalidated answer)."""
+class NoRouteFoundError(Exception):
+    """Neither the origin nor the destination could be recognised in the text."""
 
-    def extract_trip(self, text: str) -> str: ...
+    def __init__(self) -> None:
+        super().__init__("No route found in the text")
 
 
 # --- validated result --------------------------------------------------------------------------
@@ -55,12 +57,22 @@ class ParsedTrip(BaseModel):
     destination: _optional_text(config.TRIP_PLACE_MAX_LENGTH) = None
 
 
-Source = Literal["llm", "demo"]
+Source = Literal["ai", "demo"]
 
 
 class ParseResult(BaseModel):
     trip: ParsedTrip
-    source: Source  # "llm" = Gemini answer, "demo" = rule-based parser (no key or LLM failure)
+    source: Source  # "ai" = Gemini answer, "demo" = rule-based parser (no key or LLM failure)
+
+
+class LLMClient(Protocol):
+    """Turns a trip description into validated trip fields."""
+
+    source: Source
+
+    def parse_trip(self, text: str) -> ParsedTrip:
+        """Raises LLMError if the answer cannot be obtained or does not validate."""
+        ...
 
 
 # --- Gemini ------------------------------------------------------------------------------------
@@ -91,6 +103,8 @@ RESPONSE_SCHEMA = {
 class GeminiClient:
     """LLMClient backed by the Gemini generateContent REST API with structured (JSON) output."""
 
+    source: Source = "ai"
+
     def __init__(self, api_key: str, model: str, client: httpx.Client | None = None):
         self.api_key = api_key
         self.model = model
@@ -115,8 +129,17 @@ class GeminiClient:
             timeout=config.LLM_TIMEOUT_SECONDS,
         )
 
-    def extract_trip(self, text: str) -> str:
-        """Return the model's JSON text. Raises LLMError on any transport, HTTP or shape problem."""
+    def parse_trip(self, text: str) -> ParsedTrip:
+        """Ask Gemini and validate its answer. Raises LLMError on any transport, HTTP, shape or
+        validation problem (never with the user's text in the message)."""
+        raw = self._answer_text(text)
+        try:
+            return ParsedTrip.model_validate(json.loads(raw))
+        except (ValueError, ValidationError) as exc:  # json.JSONDecodeError is a ValueError
+            raise LLMError(f"Gemini answer rejected: {type(exc).__name__}") from exc
+
+    def _answer_text(self, text: str) -> str:
+        """Return the model's raw JSON text. Raises LLMError on any transport, HTTP or shape problem."""
         try:
             if self.client is not None:
                 response = self._post(self.client, text)
@@ -160,8 +183,9 @@ _PLACE_END = re.compile(
 
 
 def _clean_place(raw: str) -> str | None:
+    """Cut trailing details; a fragment longer than a place may be is not a place (-> None)."""
     place = _PLACE_END.sub("", raw).strip()
-    return place or None
+    return place if place and len(place) <= config.TRIP_PLACE_MAX_LENGTH else None
 
 
 def parse_demo(text: str) -> ParsedTrip:
@@ -182,21 +206,30 @@ def parse_demo(text: str) -> ParsedTrip:
     )
 
 
+class DemoClient:
+    """LLMClient for demo mode (no API key): the rule-based parser, no network."""
+
+    source: Source = "demo"
+
+    def parse_trip(self, text: str) -> ParsedTrip:
+        return parse_demo(text)
+
+
 # --- service -------------------------------------------------------------------------------------
 
 
-def parse_trip_text(text: str, llm: LLMClient | None) -> ParseResult:
-    """Extract trip fields from free text with the LLM, or with the rule-based parser when there is
-    no LLM (demo mode) or it fails / returns output that does not validate."""
-    if llm is None:
-        return ParseResult(trip=parse_demo(text), source="demo")
+def parse_trip_text(text: str, client: LLMClient) -> ParseResult:
+    """Extract trip fields with `client`; if it fails (LLMError), fall back to DemoClient.
+
+    Raises NoRouteFoundError when neither origin nor destination was recognised. A partial result
+    (only one of them) is returned, so the user can fill in the rest of the form.
+    """
     try:
-        raw = llm.extract_trip(text)
-        trip = ParsedTrip.model_validate(json.loads(raw))
+        trip, source = client.parse_trip(text), client.source
     except LLMError as exc:
-        logger.warning("LLM unavailable, using the rule-based parser: %s", exc)
-    except (ValueError, ValidationError) as exc:  # json.JSONDecodeError is a ValueError
-        logger.warning("LLM output rejected, using the rule-based parser: %s", type(exc).__name__)
-    else:
-        return ParseResult(trip=trip, source="llm")
-    return ParseResult(trip=parse_demo(text), source="demo")
+        logger.warning("LLM failed, using the rule-based parser: %s", exc)
+        demo = DemoClient()
+        trip, source = demo.parse_trip(text), demo.source
+    if trip.origin is None and trip.destination is None:
+        raise NoRouteFoundError()
+    return ParseResult(trip=trip, source=source)

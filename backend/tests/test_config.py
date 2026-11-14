@@ -139,8 +139,8 @@ def test_load_env_file_missing_file_is_fine(tmp_path):
 
 def test_env_example_documents_the_gemini_variables():
     example = (config.BACKEND_DIR / ".env.example").read_text()
-    assert f"{config.GEMINI_API_KEY_ENV}=\n" in example  # shipped empty: demo mode by default
-    assert config.GEMINI_MODEL_ENV in example
+    assert f"\n{config.GEMINI_API_KEY_ENV}=\n" in example  # shipped empty: demo mode by default
+    assert f"\n{config.GEMINI_MODEL_ENV}=\n" in example    # empty: default model
 
 
 def test_parse_text_limit_and_llm_timeout_are_sane():

@@ -17,6 +17,7 @@ from app.api import parse as parse_api
 from app.api import trips as trips_api
 from app.db import create_db_and_tables
 from app.services.geo import GeocodingUnavailableError, PlaceNotFoundError
+from app.services.parsing import NoRouteFoundError
 from app.services.trips import TripNotFoundError
 
 
@@ -54,6 +55,12 @@ async def place_not_found_handler(request: Request, exc: PlaceNotFoundError) -> 
 async def geocoding_unavailable_handler(request: Request, exc: GeocodingUnavailableError) -> JSONResponse:
     """The external geocoding service failed; the client may retry later -> 503."""
     return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"detail": str(exc)})
+
+
+@app.exception_handler(NoRouteFoundError)
+async def no_route_found_handler(request: Request, exc: NoRouteFoundError) -> JSONResponse:
+    """POST /api/parse: no origin or destination in the text is invalid input -> 422."""
+    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": str(exc)})
 
 
 def json_safe(value: Any) -> Any:

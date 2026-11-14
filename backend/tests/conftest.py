@@ -11,6 +11,7 @@ from app.api import parse as parse_api
 from app.api import trips as trips_api
 from app.main import app
 from app.services.geo import Coordinates, PlaceNotFoundError
+from app.services.parsing import DemoClient, ParsedTrip
 from app.services.weather import Weather
 
 # Coordinates the fake geocoder knows (rounded real values).
@@ -71,14 +72,16 @@ def weather_provider():
 
 
 class FakeLLM:
-    """Stands in for an LLMClient: returns a fixed raw answer (or raises), records every call."""
+    """Stands in for GeminiClient: returns a fixed ParsedTrip (or raises), records every call."""
 
-    def __init__(self, answer: str = "{}", error: Exception | None = None):
-        self.answer = answer
+    source = "ai"
+
+    def __init__(self, answer: ParsedTrip | None = None, error: Exception | None = None):
+        self.answer = answer or ParsedTrip()
         self.error = error
         self.calls: list[str] = []
 
-    def extract_trip(self, text: str) -> str:
+    def parse_trip(self, text: str) -> ParsedTrip:
         self.calls.append(text)
         if self.error is not None:
             raise self.error
@@ -87,11 +90,11 @@ class FakeLLM:
 
 @pytest.fixture
 def llm():
-    """Holder for the LLM the API sees: `llm.client = FakeLLM(...)`; None (demo mode) by default,
+    """Holder for the LLM client the API sees: `llm.client = FakeLLM(...)`. DemoClient by default,
     so tests never call the real Gemini API even when backend/.env has a key."""
 
     class Holder:
-        client: FakeLLM | None = None
+        client = DemoClient()
 
     return Holder()
 

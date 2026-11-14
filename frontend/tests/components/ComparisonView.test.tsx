@@ -135,4 +135,21 @@ describe('ComparisonView', () => {
     expect(screen.getByText('Polecamy: Rower')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: /Odśwież/ })).toBeEnabled())
   })
+
+  it('ignores a late answer for the previous trip when tripId changes', async () => {
+    let resolveFirst!: (c: ReturnType<typeof makeComparison>) => void
+    vi.mocked(api.getComparison)
+      .mockReturnValueOnce(new Promise((r) => (resolveFirst = r)))
+      .mockResolvedValueOnce(makeComparison({ trip_id: 2, destination: 'Nowa' }))
+    const { rerender } = render(<ComparisonView tripId={1} />)
+
+    rerender(<ComparisonView tripId={2} />)
+    expect(await screen.findByText('Gdańsk Wrzeszcz → Nowa')).toBeInTheDocument()
+
+    resolveFirst(makeComparison({ trip_id: 1, destination: 'Stara' }))
+
+    await new Promise((r) => setTimeout(r, 0))
+    expect(screen.queryByText('Gdańsk Wrzeszcz → Stara')).not.toBeInTheDocument()
+    expect(screen.getByText('Gdańsk Wrzeszcz → Nowa')).toBeInTheDocument()
+  })
 })

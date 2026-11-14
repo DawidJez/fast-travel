@@ -11,7 +11,8 @@ const MAX_NOTES = 1000
 interface Props {
   /** Trip being edited, or null to add a new one. */
   trip: Trip | null
-  onSaved: (trip: Trip) => void
+  /** `created` is true for a new trip (POST), false for an edit (PUT). */
+  onSaved: (trip: Trip, created: boolean) => void
   onCancel: () => void
 }
 
@@ -73,7 +74,7 @@ export default function TripForm({ trip, onSaved, onCancel }: Props) {
       const payload = toPayload(values)
       const saved = trip ? await api.updateTrip(trip.id, payload) : await api.createTrip(payload)
       if (!trip) setValues(EMPTY)
-      onSaved(saved)
+      onSaved(saved, !trip)
     } catch (caught) {
       setError(errorText(caught))
     } finally {

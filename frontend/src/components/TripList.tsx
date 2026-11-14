@@ -75,10 +75,10 @@ export default function TripList({
                     </span>
                   </button>
                   <div className="flex shrink-0 gap-1">
-                    <button type="button" onClick={() => onEdit(trip)} className={`${button.small} text-blue-700 hover:bg-blue-50`}>
+                    <button type="button" onClick={() => onEdit(trip)} aria-label={`Edytuj trasę „${trip.name}”`} className={`${button.small} text-blue-700 hover:bg-blue-50`}>
                       Edytuj
                     </button>
-                    <button type="button" onClick={() => onDelete(trip)} className={`${button.small} text-red-700 hover:bg-red-50`}>
+                    <button type="button" onClick={() => onDelete(trip)} aria-label={`Usuń trasę „${trip.name}”`} className={`${button.small} text-red-700 hover:bg-red-50`}>
                       Usuń
                     </button>
                   </div>

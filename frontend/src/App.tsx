@@ -42,14 +42,18 @@ export default function App() {
     void fetchTrips()
   }
 
-  function handleSaved(saved: Trip) {
+  // A save can finish after the user has moved on (edited another trip, deleted this one),
+  // so only functional updates here, and only for the trip that was saved.
+  function handleSaved(saved: Trip, created: boolean) {
     setActionError(null)
-    setTrips((current) =>
-      current.some((t) => t.id === saved.id)
-        ? current.map((t) => (t.id === saved.id ? saved : t))
-        : [saved, ...current], // list is newest first, like the API
-    )
-    setEditing(null)
+    if (listError) {
+      retry() // the list never loaded: fetch it instead of showing only the new trip
+    } else if (created) {
+      setTrips((current) => [saved, ...current]) // newest first, like the API
+    } else {
+      setTrips((current) => current.map((t) => (t.id === saved.id ? saved : t))) // deleted meanwhile: stays gone
+    }
+    if (!created) setEditing((current) => (current?.id === saved.id ? null : current))
   }
 
   async function handleDelete(trip: Trip) {

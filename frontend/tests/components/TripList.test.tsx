@@ -33,8 +33,8 @@ describe('TripList', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2)
     expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Gdańsk Wrzeszcz → Gdańsk Oliwa')
     expect(screen.getByText('rano')).toBeInTheDocument()
-    fireEvent.click(screen.getAllByRole('button', { name: 'Edytuj' })[0])
-    fireEvent.click(screen.getAllByRole('button', { name: 'Usuń' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Edytuj trasę „Praca”' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Usuń trasę „Praca”' }))
     expect(onEdit).toHaveBeenCalledWith(trip)
     expect(onDelete).toHaveBeenCalledWith(trip)
   })
@@ -48,10 +48,18 @@ describe('TripList', () => {
   it('selects a trip and marks the selected one', () => {
     const trip = makeTrip({ id: 2, name: 'Szkoła' })
     const { onSelect } = renderList({ trips: [makeTrip(), trip], selectedId: 2 })
-    const select = screen.getByRole('button', { name: /Szkoła/ })
+    const select = screen.getByRole('button', { name: /^Szkoła/ })
     expect(select).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: /Praca/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: /^Praca/ })).toHaveAttribute('aria-pressed', 'false')
     fireEvent.click(select)
     expect(onSelect).toHaveBeenCalledWith(trip)
+  })
+
+  it('names the edit and delete buttons after their trip for screen readers', () => {
+    renderList({ trips: [makeTrip(), makeTrip({ id: 2, name: 'Szkoła' })] })
+    for (const name of ['Praca', 'Szkoła']) {
+      expect(screen.getByRole('button', { name: `Edytuj trasę „${name}”` })).toHaveTextContent('Edytuj')
+      expect(screen.getByRole('button', { name: `Usuń trasę „${name}”` })).toHaveTextContent('Usuń')
+    }
   })
 })

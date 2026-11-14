@@ -27,7 +27,7 @@ describe('TripForm — add', () => {
     fill({ Nazwa: 'Praca', Skąd: 'Gdańsk Wrzeszcz', Dokąd: 'Gdańsk Oliwa', Notatka: '   ' })
     fireEvent.click(screen.getByRole('button', { name: 'Dodaj trasę' }))
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved, true))
     expect(api.createTrip).toHaveBeenCalledWith({
       name: 'Praca', origin: 'Gdańsk Wrzeszcz', destination: 'Gdańsk Oliwa', notes: null,
     })
@@ -92,7 +92,7 @@ describe('TripForm — edit', () => {
     type('Dokąd', 'Sopot')
     fireEvent.click(screen.getByRole('button', { name: 'Zapisz zmiany' }))
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved, false))
     expect(api.updateTrip).toHaveBeenCalledWith(4, {
       name: 'Praca', origin: 'Gdańsk Wrzeszcz', destination: 'Sopot', notes: 'rano',
     })

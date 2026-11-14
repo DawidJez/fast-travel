@@ -76,6 +76,18 @@ export interface Comparison {
   recommendation: Recommendation
 }
 
+/** ParseResponse (POST /api/parse): fields to prefill the trip form; null when the text does not say. */
+export interface ParsedTrip {
+  name: string | null
+  origin: string | null
+  destination: string | null
+  /** "ai" = Gemini, "demo" = rule-based parser (no API key or AI failure) */
+  source: 'ai' | 'demo'
+}
+
+/** Same limit as backend/app/config.py (PARSE_TEXT_MAX_LENGTH); the backend still validates. */
+export const PARSE_TEXT_MAX_LENGTH = 500
+
 // --- Errors ---
 
 export class ApiError extends Error {
@@ -102,6 +114,7 @@ const FIELD_LABELS: Record<string, string> = {
   origin: 'Skąd',
   destination: 'Dokąd',
   notes: 'Notatki',
+  text: 'Opis',
 }
 
 function describeIssue(issue: ValidationIssue): string {
@@ -130,6 +143,10 @@ export function errorMessage(status: number, body: unknown): string {
     // PlaceNotFoundError: "Place not found: 'Xyz'" (Python repr, ' or " quotes)
     const place = /^Place not found: (['"])(.*)\1$/.exec(detail)
     if (place) return `Nie znaleziono miejsca „${place[2]}”. Sprawdź pisownię lub podaj dokładniejszą nazwę.`
+    // NoRouteFoundError (POST /api/parse)
+    if (detail === 'No route found in the text') {
+      return 'Nie rozpoznano trasy. Napisz np. „z Oliwy do Wrzeszcza” albo „Do pracy: z Sopotu do Gdyni”.'
+    }
   }
   if (Array.isArray(detail) && detail.length > 0) {
     return detail.map((issue: ValidationIssue) => describeIssue(issue)).join('; ')
@@ -185,4 +202,5 @@ export const api = {
     request<Trip>(`/trips/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTrip: (id: number) => request<void>(`/trips/${id}`, { method: 'DELETE' }),
   getComparison: (id: number) => request<Comparison>(`/trips/${id}/comparison`),
+  parseTrip: (text: string) => request<ParsedTrip>('/parse', { method: 'POST', body: JSON.stringify({ text }) }),
 }

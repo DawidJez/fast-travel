@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { api, errorText, type Trip, type TripCreate } from '../api/client'
+import { api, errorText, type ParsedTrip, type Trip, type TripCreate } from '../api/client'
 import Spinner from './Spinner'
 import { alert, button, card } from '../ui'
 
@@ -11,6 +11,8 @@ const MAX_NOTES = 1000
 interface Props {
   /** Trip being edited, or null to add a new one. */
   trip: Trip | null
+  /** Starting values for a new trip (from the AI parser); ignored when editing. */
+  prefill?: ParsedTrip | null
   /** `created` is true for a new trip (POST), false for an edit (PUT). */
   onSaved: (trip: Trip, created: boolean) => void
   onCancel: () => void
@@ -25,10 +27,10 @@ interface Values {
 
 const EMPTY: Values = { name: '', origin: '', destination: '', notes: '' }
 
-function initialValues(trip: Trip | null): Values {
-  return trip
-    ? { name: trip.name, origin: trip.origin, destination: trip.destination, notes: trip.notes ?? '' }
-    : EMPTY
+function initialValues(trip: Trip | null, prefill: ParsedTrip | null): Values {
+  if (trip) return { name: trip.name, origin: trip.origin, destination: trip.destination, notes: trip.notes ?? '' }
+  if (prefill) return { ...EMPTY, name: prefill.name ?? '', origin: prefill.origin ?? '', destination: prefill.destination ?? '' }
+  return EMPTY
 }
 
 /** Form values -> request body (empty notes are sent as null). */
@@ -58,8 +60,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 /** Add / edit form. Remount it (key) when switching trips so it starts from that trip's values. */
-export default function TripForm({ trip, onSaved, onCancel }: Props) {
-  const [values, setValues] = useState<Values>(() => initialValues(trip))
+export default function TripForm({ trip, prefill = null, onSaved, onCancel }: Props) {
+  const [values, setValues] = useState<Values>(() => initialValues(trip, prefill))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

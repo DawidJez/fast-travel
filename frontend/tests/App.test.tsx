@@ -8,7 +8,9 @@ vi.mock('../src/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/api/client')>()
   return {
     ...actual,
-    api: { listTrips: vi.fn(), createTrip: vi.fn(), updateTrip: vi.fn(), deleteTrip: vi.fn(), getComparison: vi.fn() },
+    api: {
+      listTrips: vi.fn(), createTrip: vi.fn(), updateTrip: vi.fn(), deleteTrip: vi.fn(), getComparison: vi.fn(), parseTrip: vi.fn(),
+    },
   }
 })
 
@@ -303,5 +305,72 @@ describe('App', () => {
     await new Promise((r) => setTimeout(r, 0))
     expect(screen.queryByText(/Stara odpowiedź/)).not.toBeInTheDocument()
     expect(screen.getByText(/→ Szkoła nr 5/)).toBeInTheDocument()
+  })
+
+  // --- AI parser -> form ---
+
+  const PARSED = { name: 'Do pracy', origin: 'Oliwa', destination: 'Politechnika Gdańska', source: 'ai' as const }
+
+  async function parse(text: string) {
+    fireEvent.change(screen.getByLabelText('Opisz trasę własnymi słowami'), { target: { value: text } })
+    fireEvent.click(screen.getByRole('button', { name: /Wypełnij formularz/ }))
+  }
+
+  it('the parser fills the new-trip form, which the user can correct and save', async () => {
+    vi.mocked(api.parseTrip).mockResolvedValue(PARSED)
+    vi.mocked(api.createTrip).mockResolvedValue(makeTrip({ id: 3, name: 'Do pracy (popr.)' }))
+    render(<App />)
+    await screen.findByText('Praca')
+
+    await parse('Do pracy: z Oliwy na Politechnikę')
+
+    await waitFor(() => expect(screen.getByLabelText('Skąd')).toHaveValue('Oliwa'))
+    expect(screen.getByLabelText('Dokąd')).toHaveValue('Politechnika Gdańska')
+    fireEvent.change(screen.getByLabelText('Nazwa'), { target: { value: 'Do pracy (popr.)' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Dodaj trasę' }))
+
+    await waitFor(() => expect(api.createTrip).toHaveBeenCalledWith({
+      name: 'Do pracy (popr.)', origin: 'Oliwa', destination: 'Politechnika Gdańska', notes: null,
+    }))
+    await waitFor(() => expect(screen.getByLabelText('Skąd')).toHaveValue(''))
+  })
+
+  it('nothing is saved until the user clicks "Dodaj trasę"', async () => {
+    vi.mocked(api.parseTrip).mockResolvedValue(PARSED)
+    render(<App />)
+    await screen.findByText('Praca')
+    await parse('z Oliwy na Politechnikę')
+    await waitFor(() => expect(screen.getByLabelText('Skąd')).toHaveValue('Oliwa'))
+    expect(api.createTrip).not.toHaveBeenCalled()
+  })
+
+  it('parsing while editing switches to a new trip', async () => {
+    vi.mocked(api.parseTrip).mockResolvedValue(PARSED)
+    render(<App />)
+    await screen.findByText('Praca')
+    fireEvent.click(within(item('Szkoła')).getByRole('button', { name: /^Edytuj/ }))
+
+    await parse('z Oliwy na Politechnikę')
+
+    expect(screen.getByRole('heading', { name: 'Nowa trasa' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByLabelText('Skąd')).toHaveValue('Oliwa'))
+  })
+
+  it('a slow parse does not cancel an edit started meanwhile', async () => {
+    let resolve!: (p: typeof PARSED) => void
+    vi.mocked(api.parseTrip).mockReturnValue(new Promise((r) => (resolve = r)))
+    render(<App />)
+    await screen.findByText('Praca')
+
+    await parse('z Oliwy na Politechnikę')
+    fireEvent.click(within(item('Szkoła')).getByRole('button', { name: /^Edytuj/ }))
+    fireEvent.change(screen.getByLabelText('Notatka'), { target: { value: 'niezapisane' } })
+    resolve(PARSED)
+
+    expect(await screen.findByText(/Formularz wypełniony/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Nazwa')).toHaveValue('Szkoła')
+    expect(screen.getByLabelText('Notatka')).toHaveValue('niezapisane')
+    fireEvent.click(screen.getByRole('button', { name: 'Anuluj' }))
+    expect(screen.getByLabelText('Skąd')).toHaveValue('Oliwa') // waiting in the new-trip form
   })
 })

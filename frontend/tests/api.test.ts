@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { API_URL, ApiError, api, errorMessage, errorText, request } from '../src/api/client'
+import { API_URL, ApiError, PARSE_TEXT_MAX_LENGTH, api, errorMessage, errorText, request } from '../src/api/client'
 
 function mockFetch(response: Response | Error) {
   const fn = vi.fn(async () => {
@@ -125,6 +125,7 @@ describe('api endpoints', () => {
       { name: 'Praca', origin: 'Gdańsk', destination: 'Sopot' }],
     ['updateTrip', () => api.updateTrip(3, { notes: null }), '/trips/3', 'PUT', { notes: null }],
     ['getComparison', () => api.getComparison(3), '/trips/3/comparison', 'GET', undefined],
+    ['parseTrip', () => api.parseTrip('z Oliwy do Wrzeszcza'), '/parse', 'POST', { text: 'z Oliwy do Wrzeszcza' }],
   ])('%s', async (_name, call, path, method, body) => {
     const fetchFn = mockFetch(json(200, {}))
     await call()
@@ -149,5 +150,22 @@ describe('errorText', () => {
 
   it('hides details of unexpected errors', () => {
     expect(errorText(new TypeError('x is undefined'))).toBe('Wystąpił nieoczekiwany błąd.')
+  })
+})
+
+describe('errorMessage — POST /api/parse', () => {
+  it('translates NoRouteFoundError', () => {
+    expect(errorMessage(422, { detail: 'No route found in the text' })).toBe(
+      'Nie rozpoznano trasy. Napisz np. „z Oliwy do Wrzeszcza” albo „Do pracy: z Sopotu do Gdyni”.',
+    )
+  })
+
+  it('labels the text field in validation errors', () => {
+    const detail = [{ loc: ['body', 'text'], type: 'string_too_long', msg: 'too long', ctx: { max_length: 500 } }]
+    expect(errorMessage(422, { detail })).toBe('Opis: za długie (maks. 500 znaków)')
+  })
+
+  it('keeps the text limit in sync with the backend default', () => {
+    expect(PARSE_TEXT_MAX_LENGTH).toBe(500)
   })
 })

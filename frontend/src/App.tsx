@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, errorText, type Trip } from './api/client'
+import { api, errorText, type ParsedTrip, type Trip } from './api/client'
 import ComparisonView from './components/ComparisonView'
 import TripForm from './components/TripForm'
 import TripList from './components/TripList'
+import TripParser from './components/TripParser'
 import { card } from './ui'
 
 /** On narrow screens (one column) bring a section into view; on wide screens everything is visible. */
@@ -17,6 +18,8 @@ export default function App() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Trip | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  // AI parser result for the new-trip form; the version remounts the form so it picks the values up.
+  const [prefill, setPrefill] = useState<{ values: ParsedTrip; version: number } | null>(null)
   const selected = trips.find((t) => t.id === selectedId) ?? null
   const formRef = useRef<HTMLDivElement>(null)
   const comparisonRef = useRef<HTMLElement>(null)
@@ -54,6 +57,17 @@ export default function App() {
       setTrips((current) => current.map((t) => (t.id === saved.id ? saved : t))) // deleted meanwhile: stays gone
     }
     if (!created) setEditing((current) => (current?.id === saved.id ? null : current))
+    if (created) setPrefill(null) // used up: the next new-trip form starts empty
+  }
+
+  // Parsing is a request to fill the NEW-trip form, so leave edit mode right when the user asks
+  // (not when the answer arrives, which could cancel an edit started in the meantime).
+  function handleParseStart() {
+    setEditing(null)
+  }
+
+  function handleParsed(values: ParsedTrip) {
+    setPrefill((current) => ({ values, version: (current?.version ?? 0) + 1 }))
   }
 
   async function handleDelete(trip: Trip) {
@@ -93,10 +107,12 @@ export default function App() {
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 content-start gap-6 px-4 py-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start">
         <div className="space-y-6">
+          <TripParser onStart={handleParseStart} onParsed={handleParsed} />
           <div ref={formRef} className="scroll-mt-4">
             <TripForm
-              key={editing?.id ?? 'new'}
+              key={editing ? editing.id : `new-${prefill?.version ?? 0}`}
               trip={editing}
+              prefill={prefill?.values}
               onSaved={handleSaved}
               onCancel={() => setEditing(null)}
             />

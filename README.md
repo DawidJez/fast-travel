@@ -170,15 +170,15 @@ The project was built with **Claude Code**, working as a pair: I made the decisi
   - keep constants in `config.py` with a source,
   - the LLM never produces numbers.
 
-  This kept the design decisions on my side. Examples: Gdańsk as the reference city, Gemini as the AI provider, the behaviour when the model fails (fall back to the demo parser), the 500-character limit, Tailwind and Vitest.
-- **Control over the repository:** `.claude/settings.json` blocks git commands that change history (`add`, `commit`, `push`…) and reading `.env` files. I made the commits myself after reviewing the changes.
+  This kept the design decisions on my side. Examples: Gdańsk as the reference city, Gemini as the AI provider, the behaviour when the model fails (fall back to the demo parser), Tailwind and Vitest, etc.
+- **Control over the repository:** `.claude/settings.json` blocks git commands that change history (`add`, `commit`, `push`…) and reading `.env` files. I made the commits myself after carefully reviewing the changes.
 - **Code review:** a custom `reviewer` agent (`.claude/agents/reviewer.md`) reviewed each finished module for correctness, layering, tests and readability. Among other things it caught races when saving a trip in React, a 500 error on an unusual Gemini answer, and typed data being lost when the form was prefilled. The fixes I chose got regression tests.
 - **The `/explain` command** (`.claude/commands/explain.md`) explains a module step by step. I used it to understand the code I was approving.
 - **Sources for constants:** the AI looked up the data (TomTom, ZTM Gdańsk, UK DESNZ, studies on commute times and detour factors), and every number in `config.py` has a source comment or an `ASSUMPTION` mark.
 - **UI checks:** headless browser screenshots were used to check the layout on a phone and on a wide screen.
 
-Inside the app, AI has one narrow job: turning a sentence into form fields. The model's answer is treated as untrusted: it is validated, there is a fallback parser, and the user confirms it before saving.
+Inside the app, AI (Gemini) has one narrow job: turning a sentence into form fields. The model's answer is treated as untrusted: it is validated, there is a fallback parser, and the user confirms it before saving.
 
 ## Demo
 
-![Fast Travel demo](docs/demo.gif)
+![Fast Travel demo](docs/demo.mp4)

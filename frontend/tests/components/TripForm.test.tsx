@@ -125,6 +125,20 @@ describe('TripForm — prefill from the AI parser', () => {
     expect(screen.getByLabelText('Notatka')).toHaveValue('')
   })
 
+  it('a new prefill fills the form in place and keeps typed values for fields it did not find', () => {
+    const first = { name: null, origin: 'Oliwa', destination: null, source: 'ai' as const }
+    const { rerender } = render(<TripForm trip={null} prefill={first} onSaved={vi.fn()} onCancel={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('Nazwa'), { target: { value: 'Moja' } })
+    fireEvent.change(screen.getByLabelText('Notatka'), { target: { value: 'notatka' } })
+
+    rerender(<TripForm trip={null} prefill={{ name: null, origin: null, destination: 'Sopot', source: 'demo' }} onSaved={vi.fn()} onCancel={vi.fn()} />)
+
+    expect(screen.getByLabelText('Nazwa')).toHaveValue('Moja')
+    expect(screen.getByLabelText('Skąd')).toHaveValue('Oliwa')
+    expect(screen.getByLabelText('Dokąd')).toHaveValue('Sopot')
+    expect(screen.getByLabelText('Notatka')).toHaveValue('notatka')
+  })
+
   it('ignores the prefill when editing a trip', () => {
     const prefill = { name: 'X', origin: 'Y', destination: 'Z', source: 'ai' as const }
     render(<TripForm trip={makeTrip()} prefill={prefill} onSaved={vi.fn()} onCancel={vi.fn()} />)

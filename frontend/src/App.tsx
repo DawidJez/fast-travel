@@ -18,8 +18,10 @@ export default function App() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Trip | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
-  // AI parser result for the new-trip form; the version remounts the form so it picks the values up.
-  const [prefill, setPrefill] = useState<{ values: ParsedTrip; version: number } | null>(null)
+  // AI parser result for the new-trip form (merged into it; kept until a new trip is saved).
+  const [prefill, setPrefill] = useState<ParsedTrip | null>(null)
+  // The edit that was open when parsing started: a successful parse closes it (see handleParsed).
+  const editingAtParseStart = useRef<Trip | null>(null)
   const selected = trips.find((t) => t.id === selectedId) ?? null
   const formRef = useRef<HTMLDivElement>(null)
   const comparisonRef = useRef<HTMLElement>(null)
@@ -60,14 +62,16 @@ export default function App() {
     if (created) setPrefill(null) // used up: the next new-trip form starts empty
   }
 
-  // Parsing is a request to fill the NEW-trip form, so leave edit mode right when the user asks
-  // (not when the answer arrives, which could cancel an edit started in the meantime).
+  // Parsing fills the NEW-trip form. Leave edit mode only once it succeeded (a failed parse keeps
+  // the unsaved edit), and only for the edit open when the user asked (one started meanwhile stays).
   function handleParseStart() {
-    setEditing(null)
+    editingAtParseStart.current = editing
   }
 
   function handleParsed(values: ParsedTrip) {
-    setPrefill((current) => ({ values, version: (current?.version ?? 0) + 1 }))
+    setPrefill(values)
+    const started = editingAtParseStart.current
+    setEditing((current) => (current === started ? null : current))
   }
 
   async function handleDelete(trip: Trip) {
@@ -110,9 +114,9 @@ export default function App() {
           <TripParser onStart={handleParseStart} onParsed={handleParsed} />
           <div ref={formRef} className="scroll-mt-4">
             <TripForm
-              key={editing ? editing.id : `new-${prefill?.version ?? 0}`}
+              key={editing ? editing.id : 'new'}
               trip={editing}
-              prefill={prefill?.values}
+              prefill={prefill}
               onSaved={handleSaved}
               onCancel={() => setEditing(null)}
             />

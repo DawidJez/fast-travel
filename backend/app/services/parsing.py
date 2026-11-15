@@ -158,9 +158,12 @@ class GeminiClient:
             raise LLMError("Gemini returned an unexpected response") from exc
 
         try:
-            return body["candidates"][0]["content"]["parts"][0]["text"]
+            raw = body["candidates"][0]["content"]["parts"][0]["text"]
         except (KeyError, IndexError, TypeError) as exc:  # e.g. blocked prompt: no candidates
             raise LLMError("Gemini returned no text") from exc
+        if not isinstance(raw, str):  # e.g. a number or null instead of the JSON text
+            raise LLMError("Gemini returned no text")
+        return raw
 
 
 # --- rule-based fallback (demo mode) -----------------------------------------------------------
@@ -177,7 +180,8 @@ _ARROW = re.compile(r"^(?P<origin>.+?)\s*(?:->|→|\s[-–—]\s)\s*(?P<destinat
 _PLACE_END = re.compile(
     r"\s+(?:o|około|ok\.|na|w|we|at|by)\s+\d.*$"
     r"|\s+(?:rowerem|autem|samochodem|tramwajem|autobusem|pieszo|komunikacją|pociągiem|skm)\b.*$"
-    r"|[,;!?].*$|\.\s*$",  # a full stop only at the very end: "ul. Grunwaldzka" must survive
+    r"|[,;!?].*$|:(?!\d).*$"  # a colon, but not inside a time like "8:00"
+    r"|\.\s*$",  # a full stop only at the very end: "ul. Grunwaldzka" must survive
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -188,22 +192,29 @@ def _clean_place(raw: str) -> str | None:
     return place if place and len(place) <= config.TRIP_PLACE_MAX_LENGTH else None
 
 
-def parse_demo(text: str) -> ParsedTrip:
-    """Very simple rule-based extraction: "[name:] z X do Y" or "X -> Y". No grammar (cases stay as typed)."""
-    name = None
-    rest = text.strip()
-    prefixed = _NAME_PREFIX.match(rest)
-    if prefixed:
-        name, rest = prefixed.group(1).strip(), prefixed.group(2).strip()
-
-    match = _FROM_TO.search(rest) or _ARROW.match(rest)
+def _route(text: str) -> tuple[str | None, str | None] | None:
+    """(origin, destination) from "z X do Y" or "X -> Y", or None when the text has no route."""
+    match = _FROM_TO.search(text) or _ARROW.match(text)
     if not match:
-        return ParsedTrip(name=name)
-    return ParsedTrip(
-        name=name,
-        origin=_clean_place(match.group("origin")),
-        destination=_clean_place(match.group("destination")),
-    )
+        return None
+    return _clean_place(match.group("origin")), _clean_place(match.group("destination"))
+
+
+def parse_demo(text: str) -> ParsedTrip:
+    """Very simple rule-based extraction: "[name:] z X do Y" or "X -> Y". No grammar (cases stay as typed).
+
+    The text before a colon is a name only if the route follows it ("Do pracy: z X do Y"); a colon
+    after the route ("z X do Y rowerem: codziennie") is just a detail.
+    """
+    text = text.strip()
+    prefixed = _NAME_PREFIX.match(text)
+    if prefixed and (route := _route(prefixed.group(2).strip())):
+        origin, destination = route
+        return ParsedTrip(name=prefixed.group(1).strip(), origin=origin, destination=destination)
+    if route := _route(text):
+        origin, destination = route
+        return ParsedTrip(origin=origin, destination=destination)
+    return ParsedTrip(name=prefixed.group(1).strip() if prefixed else None)
 
 
 class DemoClient:

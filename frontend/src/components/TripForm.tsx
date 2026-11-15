@@ -27,9 +27,19 @@ interface Values {
 
 const EMPTY: Values = { name: '', origin: '', destination: '', notes: '' }
 
+/** Parsed fields over the current values; a field the parser did not find keeps what the user typed. */
+function withPrefill(values: Values, prefill: ParsedTrip): Values {
+  return {
+    ...values,
+    name: prefill.name ?? values.name,
+    origin: prefill.origin ?? values.origin,
+    destination: prefill.destination ?? values.destination,
+  }
+}
+
 function initialValues(trip: Trip | null, prefill: ParsedTrip | null): Values {
   if (trip) return { name: trip.name, origin: trip.origin, destination: trip.destination, notes: trip.notes ?? '' }
-  if (prefill) return { ...EMPTY, name: prefill.name ?? '', origin: prefill.origin ?? '', destination: prefill.destination ?? '' }
+  if (prefill) return withPrefill(EMPTY, prefill)
   return EMPTY
 }
 
@@ -59,9 +69,16 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   )
 }
 
-/** Add / edit form. Remount it (key) when switching trips so it starts from that trip's values. */
+/** Add / edit form. Remount it (key) when switching trips so it starts from that trip's values.
+ *  A new `prefill` (each parser answer is a new object) is merged into the new-trip form in place. */
 export default function TripForm({ trip, prefill = null, onSaved, onCancel }: Props) {
   const [values, setValues] = useState<Values>(() => initialValues(trip, prefill))
+  const [appliedPrefill, setAppliedPrefill] = useState(prefill)
+  if (!trip && prefill && prefill !== appliedPrefill) {
+    // Adjusting state while rendering (React docs: "storing information from previous renders").
+    setAppliedPrefill(prefill)
+    setValues((current) => withPrefill(current, prefill))
+  }
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

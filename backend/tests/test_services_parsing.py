@@ -8,7 +8,7 @@ import pytest
 from app import config
 from app.services import parsing
 from app.services.parsing import (
-    DemoClient, GeminiClient, LLMError, NoRouteFoundError, ParsedTrip, parse_demo, parse_trip_text,
+    DemoClient, GeminiClient, LLMError, NoRouteFoundError, ParsedTrip, parse_demo, parse_trip_text, _route,
 )
 from tests.conftest import FakeLLM
 
@@ -31,6 +31,11 @@ DEMO_CASES = [
     ("8:00 rowerem",                                                (None, None, None)),
     ("Siłownia: jutro",                                             ("Siłownia", None, None)),
     ("z Oliwa do " + "x" * 300,                                     (None, "Oliwa", None)),  # too long for a place
+    ("z Oliwa do Wrzeszcz rowerem: codziennie",                     (None, "Oliwa", "Wrzeszcz")),  # colon after the route
+    ("Oliwa -> Wrzeszcz: rano",                                     (None, "Oliwa", "Wrzeszcz")),
+    ("z Oliwa do Wrzeszcz, tramwajem: 8:00",                        (None, "Oliwa", "Wrzeszcz")),
+    ("Dom -> Praca: rano",                                          (None, "Dom", "Praca")),
+    ("Szkoła: Oliwa -> Wrzeszcz o 8:00",                            ("Szkoła", "Oliwa", "Wrzeszcz")),
 ]
 
 
@@ -69,6 +74,14 @@ def test_parsed_trip_ignores_unknown_fields():
 def test_parse_demo_cases(text, expected):
     trip = parse_demo(text)
     assert (trip.name, trip.origin, trip.destination) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("z Oliwa do Wrzeszcz", ("Oliwa", "Wrzeszcz")), ("Oliwa -> Wrzeszcz: rano", ("Oliwa", "Wrzeszcz")), ("jutro rano", None)],
+)
+def test_route_finds_origin_and_destination_or_none(text, expected):
+    assert _route(text) == expected
 
 
 def test_demo_client_uses_the_rule_parser_and_is_marked_demo():
@@ -233,6 +246,8 @@ def test_gemini_invalid_json_envelope_raises_llm_error():
         {"candidates": []},
         {"candidates": [{"finishReason": "SAFETY"}]},           # no content
         {"candidates": [{"content": {"parts": []}}]},
+        {"candidates": [{"content": {"parts": [{"text": 123}]}}]},  # not a string
+        {"candidates": [{"content": {"parts": [{"text": None}]}}]},
         [],
     ],
 )

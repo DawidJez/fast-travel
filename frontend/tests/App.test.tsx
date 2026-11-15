@@ -352,8 +352,34 @@ describe('App', () => {
 
     await parse('z Oliwy na Politechnikę')
 
-    expect(screen.getByRole('heading', { name: 'Nowa trasa' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nowa trasa' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByLabelText('Skąd')).toHaveValue('Oliwa'))
+  })
+
+  it('a failed parse keeps the edit in progress', async () => {
+    vi.mocked(api.parseTrip).mockRejectedValue(new ApiError(422, 'Nie rozpoznano trasy.'))
+    render(<App />)
+    await screen.findByText('Praca')
+    fireEvent.click(within(item('Szkoła')).getByRole('button', { name: /^Edytuj/ }))
+    fireEvent.change(screen.getByLabelText('Notatka'), { target: { value: 'niezapisane' } })
+
+    await parse('jutro rano')
+
+    expect(await screen.findByText(/Nie rozpoznano trasy/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Nazwa')).toHaveValue('Szkoła')
+    expect(screen.getByLabelText('Notatka')).toHaveValue('niezapisane')
+  })
+
+  it('parsing keeps what the user already typed for fields the parser did not find', async () => {
+    vi.mocked(api.parseTrip).mockResolvedValue({ name: null, origin: null, destination: 'Politechnika Gdańska', source: 'demo' })
+    render(<App />)
+    await screen.findByText('Praca')
+    fireEvent.change(screen.getByLabelText('Skąd'), { target: { value: 'Oliwa' } })
+
+    await parse('na Politechnikę')
+
+    await waitFor(() => expect(screen.getByLabelText('Dokąd')).toHaveValue('Politechnika Gdańska'))
+    expect(screen.getByLabelText('Skąd')).toHaveValue('Oliwa')
   })
 
   it('a slow parse does not cancel an edit started meanwhile', async () => {

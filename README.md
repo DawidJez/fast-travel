@@ -182,3 +182,5 @@ Inside the app, AI (Gemini) has one narrow job: turning a sentence into form fie
 ## Demo
 
 ![Fast Travel demo](docs/demo.gif)
+[Full-quality video (MP4) 1](docs/demo.mp4)
+[Full-quality video (MP4) 2](docs/demo-continuation_AI-func.mp4)
